@@ -46,6 +46,7 @@ DEFAULT_OUTPUT_SELECTION_MANUAL = 0
 DEFAULT_NAMED_MEASUREMENTS: Tuple[Tuple[str, str], ...] = (
     ("actual_output_voltage", "Actual Output Voltage"),
     ("actual_output_current", "Actual Output Current"),
+    ("actual_output_power", "Actual Output Power"),
     ("device_status", "Device Status"),
     ("error_number", "Error Number"),
 )
@@ -280,7 +281,7 @@ class SafeChannelController:
             LOGGER.exception("Failed to force safe zero-output state for channel %s", self.config.channel)
 
     def apply_zero_output(self, disable_output: bool = False) -> None:
-        self._set_output_setpoints(power=0.0, set_voltage=0.0, set_current=0.0)
+        self._set_output_setpoints(power=0.0, set_voltage=0.0, set_current=0.0, force_zero=True)
         if disable_output:
             self._set_output_enabled(False)
 
@@ -292,7 +293,7 @@ class SafeChannelController:
                 address=self.config.address,
                 parameter_instance=self.config.channel,
             )
-        self._set_output_setpoints(power=step.power, set_voltage=step.set_voltage, set_current=step.set_current)
+        self._set_output_setpoints(power=step.power, set_voltage=step.set_voltage, set_current=step.set_current, force_zero=False)
         self._set_output_enabled(step.enable_output)
 
     def _set_output_enabled(self, enabled: bool) -> None:
@@ -304,7 +305,7 @@ class SafeChannelController:
             parameter_instance=self.config.channel,
         )
 
-    def _set_output_setpoints(self, power: float, set_voltage: Optional[float], set_current: Optional[float]) -> None:
+    def _set_output_setpoints(self, power: float, set_voltage: Optional[float], set_current: Optional[float], force_zero: bool = False) -> None:
         specs = self.config.output_setpoint_parameters
         if "power" in specs:
             self._write_parameter(specs["power"], power)
@@ -312,7 +313,7 @@ class SafeChannelController:
             # As a conservative fallback, drive both available electrical setpoints to zero
             # or to explicitly configured values. This avoids guessing a TEC1161-specific power
             # parameter when the exact ID is not yet confirmed.
-            self._maybe_write_voltage_current(set_voltage=set_voltage, set_current=set_current, force_zero=(power == 0.0))
+            self._maybe_write_voltage_current(set_voltage=set_voltage, set_current=set_current, force_zero=force_zero)
 
     def _maybe_write_voltage_current(self, set_voltage: Optional[float], set_current: Optional[float], force_zero: bool) -> None:
         voltage = 0.0 if force_zero else set_voltage

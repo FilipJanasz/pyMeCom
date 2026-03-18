@@ -111,6 +111,7 @@ The script supports two ways of reading parameters:
 1. **Named parameters** already present in `mecom/commands.py`, for example:
    - `Actual Output Voltage`
    - `Actual Output Current`
+   - `Actual Output Power`
    - `Object Temperature`
    - `Sink Temperature`
 2. **Raw parameters** using `parameter_id` and `parameter_format` for signals that are not yet represented in `mecom/commands.py`.
@@ -156,6 +157,7 @@ Each measurement record stores:
 - `target.output_enabled`
 - `measurements.actual_output_voltage`
 - `measurements.actual_output_current`
+- `measurements.actual_output_power`
 - configured extra measurements such as HR Input 1/2 differential voltage
 - `low_resolution_temperatures.*`
 - `status.device_status`
