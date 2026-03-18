@@ -17,6 +17,7 @@ TEC_PARAMETERS = [
     {"id": 1011, "name": "Ramp Object Temperature", "format": "FLOAT32"},
     {"id": 1020, "name": "Actual Output Current", "format": "FLOAT32"},
     {"id": 1021, "name": "Actual Output Voltage", "format": "FLOAT32"},
+    {"id": 1022, "name": "Actual Output Power", "format": "FLOAT32"},
     {"id": 1102, "name": "Actual Fan Speed", "format": "FLOAT32"},
     {"id": 1200, "name": "Temperature is Stable", "format": "INT32"},
     {"id": 3002, "name": "Proximity Width", "format": "FLOAT32"},
