@@ -9,3 +9,4 @@ mecom.py contains the communication logic
 
 from .mecom import MeCom, MeComSerial, MeComTcp, VR, VS, Parameter
 from .exceptions import ResponseException, WrongChecksum
+from .calibration import CalibrationConfig, CalibrationStep, ParameterSpec, TecCalibrationRunner
