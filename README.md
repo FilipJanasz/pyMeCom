@@ -76,7 +76,7 @@ Key top-level fields:
 - `device_label`: label included in metadata and filenames
 - `dwell_seconds_default`: default dwell if a step does not override it
 - `settle_seconds`: short delay after forcing initial zero output
-- `output_stage_input_selection`: optional output-source selection written before each step
+- `output_stage_input_selection`: optional output-source selection written before each step; leave unset unless you have confirmed your controller accepts the generic command
 - `allow_named_voltage_current_fallback`: optional compatibility switch; defaults to `false` because some TEC1161 setups time out on the generic named `Set Voltage` / `Set Current` commands
 - `steps`: the calibration table
 - `measurement_parameters`: additional measurements, including raw TEC1161 parameters
@@ -101,7 +101,7 @@ If you configure `output_setpoint_parameters.power`, the runner writes that para
 
 If you instead configure `output_setpoint_parameters.voltage` and/or `output_setpoint_parameters.current`, the runner writes those explicit parameters.
 
-By default it does **not** fall back to the generic named MeCom commands `Set Voltage` and `Set Current`, because some TEC1161 setups do not respond to those commands and will time out over serial. If your controller is known to support those generic commands, you can opt back into the legacy behavior with `allow_named_voltage_current_fallback: true`.
+By default it does **not** write `output_stage_input_selection`, and it also does **not** fall back to the generic named MeCom commands `Set Voltage` and `Set Current`, because some TEC1161 setups do not respond to those generic commands and will time out over serial. If your controller is known to support them, you can opt in explicitly by setting `output_stage_input_selection` to a concrete value and/or `allow_named_voltage_current_fallback: true`.
 
 #### Does it store HR Input 1 and HR Input 2 differential voltage?
 

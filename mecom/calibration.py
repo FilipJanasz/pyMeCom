@@ -41,7 +41,6 @@ DEFAULT_STEP_DWELL_SECONDS = 30 * 60
 DEFAULT_SETTLE_SECONDS = 1.0
 DEFAULT_OUTPUT_ENABLE = 1
 DEFAULT_OUTPUT_DISABLE = 0
-DEFAULT_OUTPUT_SELECTION_MANUAL = 0
 
 # Named parameters that are already represented in mecom/commands.py.
 DEFAULT_NAMED_MEASUREMENTS: Tuple[Tuple[str, str], ...] = (
@@ -109,7 +108,7 @@ class CalibrationConfig:
     settle_seconds: float = DEFAULT_SETTLE_SECONDS
     enable_output_value: int = DEFAULT_OUTPUT_ENABLE
     disable_output_value: int = DEFAULT_OUTPUT_DISABLE
-    output_stage_input_selection: Optional[int] = DEFAULT_OUTPUT_SELECTION_MANUAL
+    output_stage_input_selection: Optional[int] = None
     allow_named_voltage_current_fallback: bool = False
     write_header_metadata: bool = True
     steps: List[CalibrationStep] = field(default_factory=list)
@@ -255,6 +254,7 @@ class SafeChannelController:
         self._armed = False
         self._signal_handlers: Dict[int, Any] = {}
         self._missing_output_setpoint_warning_emitted = False
+        self._output_stage_input_selection_timeout_emitted = False
 
     def arm(self) -> None:
         if self._armed:
@@ -299,12 +299,25 @@ class SafeChannelController:
 
     def apply_step(self, step: CalibrationStep) -> None:
         if self.config.output_stage_input_selection is not None:
-            self.session.set_parameter(
-                value=self.config.output_stage_input_selection,
-                parameter_name="Output Stage Input Selection",
-                address=self.config.address,
-                parameter_instance=self.config.channel,
-            )
+            try:
+                self.session.set_parameter(
+                    value=self.config.output_stage_input_selection,
+                    parameter_name="Output Stage Input Selection",
+                    address=self.config.address,
+                    parameter_instance=self.config.channel,
+                )
+            except ResponseTimeout:
+                if self._output_stage_input_selection_timeout_emitted:
+                    raise
+                LOGGER.warning(
+                    "Timed out while writing 'Output Stage Input Selection' on channel %s; "
+                    "disabling that optional write for the rest of the run. Set "
+                    "output_stage_input_selection to null/omit it if your device does not support "
+                    "the generic command.",
+                    self.config.channel,
+                )
+                self._output_stage_input_selection_timeout_emitted = True
+                self.config.output_stage_input_selection = None
         setpoints_applied = self._set_output_setpoints(
             power=step.power,
             set_voltage=step.set_voltage,

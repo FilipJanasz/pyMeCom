@@ -8,7 +8,6 @@
   "device_label": "TEC1161",
   "dwell_seconds_default": 10,
   "settle_seconds": 1.0,
-  "output_stage_input_selection": 0,
   "steps": [
     {
       "name": "zero_baseline",
