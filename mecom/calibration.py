@@ -264,6 +264,12 @@ class SafeChannelController:
         self._armed = True
 
     def disarm(self) -> None:
+        if not self._armed:
+            return
+        atexit.unregister(self.force_safe_state)
+        for sig, previous in self._signal_handlers.items():
+            signal.signal(sig, previous)
+        self._signal_handlers.clear()
         self._armed = False
 
     def _signal_handler(self, signum: int, frame: Any) -> None:
@@ -275,6 +281,9 @@ class SafeChannelController:
         raise SystemExit(128 + signum)
 
     def force_safe_state(self) -> None:
+        if not self._session_is_open():
+            LOGGER.debug("Skipping safe-state write for channel %s because the serial port is already closed", self.config.channel)
+            return
         try:
             self.apply_zero_output(disable_output=True)
         except Exception:  # pragma: no cover - best effort shutdown path
@@ -333,6 +342,10 @@ class SafeChannelController:
                 parameter_instance=self.config.channel,
             )
 
+    def _session_is_open(self) -> bool:
+        serial_handle = getattr(self.session, "ser", None)
+        return bool(serial_handle is not None and getattr(serial_handle, "is_open", False))
+
     def _write_parameter(self, spec: ParameterSpec, value: Any) -> None:
         kwargs = {
             "address": self.config.address,
@@ -377,10 +390,18 @@ class TecCalibrationRunner:
 
                 for index, step in enumerate(self.config.normalized_steps()):
                     LOGGER.info("Applying calibration step %s (%s)", index, step.name)
+                    step_started_at = datetime.now(timezone.utc)
                     self.safe_controller.apply_step(step)
                     LOGGER.info("Dwelling for %s seconds", step.dwell_seconds)
                     time.sleep(step.dwell_seconds)
-                    record = self._collect_record(reader, index, step)
+                    measured_at = datetime.now(timezone.utc)
+                    record = self._collect_record(
+                        reader,
+                        index,
+                        step,
+                        step_started_at=step_started_at,
+                        measured_at=measured_at,
+                    )
                     self.logger.append_record(record)
 
                 LOGGER.info("Calibration steps complete, driving output to zero")
@@ -394,8 +415,17 @@ class TecCalibrationRunner:
         finally:
             if self.safe_controller is not None:
                 self.safe_controller.force_safe_state()
+                self.safe_controller.disarm()
 
-    def _collect_record(self, reader: MeasurementReader, step_index: int, step: CalibrationStep) -> Dict[str, Any]:
+    def _collect_record(
+        self,
+        reader: MeasurementReader,
+        step_index: int,
+        step: CalibrationStep,
+        *,
+        step_started_at: datetime,
+        measured_at: datetime,
+    ) -> Dict[str, Any]:
         measurements: Dict[str, Any] = {}
         measurement_errors: Dict[str, str] = {}
 
@@ -443,8 +473,13 @@ class TecCalibrationRunner:
         }
         status = self._read_status_summary(reader)
 
+        actual_dwell_seconds = (measured_at - step_started_at).total_seconds()
+
         return {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": measured_at.isoformat(),
+            "step_started_at": step_started_at.isoformat(),
+            "requested_dwell_seconds": step.dwell_seconds,
+            "actual_dwell_seconds": actual_dwell_seconds,
             "run_started_at": self.run_started_at.isoformat(),
             "device_label": self.config.device_label,
             "serial_port": self.config.serial_port,
