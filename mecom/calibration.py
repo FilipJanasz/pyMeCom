@@ -32,6 +32,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+from .exceptions import ResponseTimeout
 from .mecom import MeComSerial
 
 LOGGER = logging.getLogger(__name__)
@@ -321,12 +322,20 @@ class SafeChannelController:
 
     def _set_output_enabled(self, enabled: bool) -> None:
         value = self.config.enable_output_value if enabled else self.config.disable_output_value
-        self.session.set_parameter(
-            value=value,
-            parameter_name="Output Enable Status",
-            address=self.config.address,
-            parameter_instance=self.config.channel,
-        )
+        try:
+            self.session.set_parameter(
+                value=value,
+                parameter_name="Output Enable Status",
+                address=self.config.address,
+                parameter_instance=self.config.channel,
+            )
+        except ResponseTimeout:
+            if enabled:
+                raise
+            LOGGER.warning(
+                "Timed out while disabling output on channel %s; continuing because safe-state shutdown is best-effort.",
+                self.config.channel,
+            )
 
     def _set_output_setpoints(self, power: float, set_voltage: Optional[float], set_current: Optional[float], force_zero: bool = False) -> bool:
         specs = self.config.output_setpoint_parameters

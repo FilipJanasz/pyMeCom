@@ -8,6 +8,7 @@ serial_stub.serialutil = types.SimpleNamespace(SerialException=Exception)
 sys.modules.setdefault('serial', serial_stub)
 
 from mecom.calibration import CalibrationConfig, CalibrationStep, SafeChannelController
+from mecom.exceptions import ResponseTimeout
 
 
 class DummySession:
@@ -20,6 +21,13 @@ class DummySession:
 
     def set_parameter_raw(self, **kwargs):
         self.calls.append(("set_parameter_raw", kwargs))
+
+
+class TimeoutOnDisableSession(DummySession):
+    def set_parameter(self, **kwargs):
+        if kwargs.get('parameter_name') == 'Output Enable Status' and kwargs.get('value') == 0:
+            raise ResponseTimeout('timeout while communication via serial')
+        super().set_parameter(**kwargs)
 
 
 class SafeChannelControllerTests(unittest.TestCase):
@@ -48,6 +56,16 @@ class SafeChannelControllerTests(unittest.TestCase):
         output_enable_calls = [call for call in session.calls if call[1].get('parameter_name') == 'Output Enable Status']
         self.assertEqual(output_enable_calls[-1][1]['value'], config.enable_output_value)
 
+
+    def test_disable_output_timeout_is_best_effort_during_safe_shutdown(self):
+        session = TimeoutOnDisableSession()
+        config = CalibrationConfig(serial_port='COM1')
+        controller = SafeChannelController(session, config)
+
+        controller.apply_zero_output(disable_output=True)
+
+        setpoint_calls = [call for call in session.calls if call[1].get('parameter_name') in {'Set Voltage', 'Set Current'}]
+        self.assertEqual(setpoint_calls, [])
 
 if __name__ == '__main__':
     unittest.main()
