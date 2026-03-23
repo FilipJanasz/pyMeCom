@@ -377,10 +377,18 @@ class TecCalibrationRunner:
 
                 for index, step in enumerate(self.config.normalized_steps()):
                     LOGGER.info("Applying calibration step %s (%s)", index, step.name)
+                    step_started_at = datetime.now(timezone.utc)
                     self.safe_controller.apply_step(step)
                     LOGGER.info("Dwelling for %s seconds", step.dwell_seconds)
                     time.sleep(step.dwell_seconds)
-                    record = self._collect_record(reader, index, step)
+                    measured_at = datetime.now(timezone.utc)
+                    record = self._collect_record(
+                        reader,
+                        index,
+                        step,
+                        step_started_at=step_started_at,
+                        measured_at=measured_at,
+                    )
                     self.logger.append_record(record)
 
                 LOGGER.info("Calibration steps complete, driving output to zero")
@@ -395,7 +403,15 @@ class TecCalibrationRunner:
             if self.safe_controller is not None:
                 self.safe_controller.force_safe_state()
 
-    def _collect_record(self, reader: MeasurementReader, step_index: int, step: CalibrationStep) -> Dict[str, Any]:
+    def _collect_record(
+        self,
+        reader: MeasurementReader,
+        step_index: int,
+        step: CalibrationStep,
+        *,
+        step_started_at: datetime,
+        measured_at: datetime,
+    ) -> Dict[str, Any]:
         measurements: Dict[str, Any] = {}
         measurement_errors: Dict[str, str] = {}
 
@@ -443,8 +459,13 @@ class TecCalibrationRunner:
         }
         status = self._read_status_summary(reader)
 
+        actual_dwell_seconds = (measured_at - step_started_at).total_seconds()
+
         return {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": measured_at.isoformat(),
+            "step_started_at": step_started_at.isoformat(),
+            "requested_dwell_seconds": step.dwell_seconds,
+            "actual_dwell_seconds": actual_dwell_seconds,
             "run_started_at": self.run_started_at.isoformat(),
             "device_label": self.config.device_label,
             "serial_port": self.config.serial_port,
