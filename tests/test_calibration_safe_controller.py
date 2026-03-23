@@ -30,6 +30,18 @@ class TimeoutOnDisableSession(DummySession):
         super().set_parameter(**kwargs)
 
 
+class TimeoutOnOutputSelectionSession(DummySession):
+    def __init__(self):
+        super().__init__()
+        self.selection_attempts = 0
+
+    def set_parameter(self, **kwargs):
+        if kwargs.get('parameter_name') == 'Output Stage Input Selection':
+            self.selection_attempts += 1
+            raise ResponseTimeout('timeout while communication via serial')
+        super().set_parameter(**kwargs)
+
+
 class SafeChannelControllerTests(unittest.TestCase):
     def test_missing_output_setpoint_path_keeps_output_disabled(self):
         session = DummySession()
@@ -66,6 +78,17 @@ class SafeChannelControllerTests(unittest.TestCase):
 
         setpoint_calls = [call for call in session.calls if call[1].get('parameter_name') in {'Set Voltage', 'Set Current'}]
         self.assertEqual(setpoint_calls, [])
+
+    def test_output_stage_input_selection_timeout_is_disabled_after_first_failure(self):
+        session = TimeoutOnOutputSelectionSession()
+        config = CalibrationConfig(serial_port='COM1', output_stage_input_selection=0)
+        controller = SafeChannelController(session, config)
+
+        controller.apply_step(CalibrationStep(name='step_1', power=0.0, enable_output=False))
+        controller.apply_step(CalibrationStep(name='step_2', power=0.0, enable_output=False))
+
+        self.assertEqual(session.selection_attempts, 1)
+        self.assertIsNone(config.output_stage_input_selection)
 
 if __name__ == '__main__':
     unittest.main()
