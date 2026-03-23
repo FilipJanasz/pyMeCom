@@ -264,6 +264,12 @@ class SafeChannelController:
         self._armed = True
 
     def disarm(self) -> None:
+        if not self._armed:
+            return
+        atexit.unregister(self.force_safe_state)
+        for sig, previous in self._signal_handlers.items():
+            signal.signal(sig, previous)
+        self._signal_handlers.clear()
         self._armed = False
 
     def _signal_handler(self, signum: int, frame: Any) -> None:
@@ -275,6 +281,9 @@ class SafeChannelController:
         raise SystemExit(128 + signum)
 
     def force_safe_state(self) -> None:
+        if not self._session_is_open():
+            LOGGER.debug("Skipping safe-state write for channel %s because the serial port is already closed", self.config.channel)
+            return
         try:
             self.apply_zero_output(disable_output=True)
         except Exception:  # pragma: no cover - best effort shutdown path
@@ -332,6 +341,10 @@ class SafeChannelController:
                 address=self.config.address,
                 parameter_instance=self.config.channel,
             )
+
+    def _session_is_open(self) -> bool:
+        serial_handle = getattr(self.session, "ser", None)
+        return bool(serial_handle is not None and getattr(serial_handle, "is_open", False))
 
     def _write_parameter(self, spec: ParameterSpec, value: Any) -> None:
         kwargs = {
@@ -402,6 +415,7 @@ class TecCalibrationRunner:
         finally:
             if self.safe_controller is not None:
                 self.safe_controller.force_safe_state()
+                self.safe_controller.disarm()
 
     def _collect_record(
         self,
