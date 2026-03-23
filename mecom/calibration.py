@@ -109,6 +109,7 @@ class CalibrationConfig:
     enable_output_value: int = DEFAULT_OUTPUT_ENABLE
     disable_output_value: int = DEFAULT_OUTPUT_DISABLE
     output_stage_input_selection: Optional[int] = DEFAULT_OUTPUT_SELECTION_MANUAL
+    allow_named_voltage_current_fallback: bool = False
     write_header_metadata: bool = True
     steps: List[CalibrationStep] = field(default_factory=list)
     measurement_parameters: List[ParameterSpec] = field(default_factory=list)
@@ -252,6 +253,7 @@ class SafeChannelController:
         self._reader = MeasurementReader(session, config.address, config.channel)
         self._armed = False
         self._signal_handlers: Dict[int, Any] = {}
+        self._missing_output_setpoint_warning_emitted = False
 
     def arm(self) -> None:
         if self._armed:
@@ -302,8 +304,20 @@ class SafeChannelController:
                 address=self.config.address,
                 parameter_instance=self.config.channel,
             )
-        self._set_output_setpoints(power=step.power, set_voltage=step.set_voltage, set_current=step.set_current, force_zero=False)
-        self._set_output_enabled(step.enable_output)
+        setpoints_applied = self._set_output_setpoints(
+            power=step.power,
+            set_voltage=step.set_voltage,
+            set_current=step.set_current,
+            force_zero=False,
+        )
+        should_enable_output = step.enable_output and setpoints_applied
+        if step.enable_output and not should_enable_output:
+            LOGGER.warning(
+                "Step '%s' requested output enable on channel %s, but no writable output setpoint path is configured; keeping output disabled for safety.",
+                step.name,
+                self.config.channel,
+            )
+        self._set_output_enabled(should_enable_output)
 
     def _set_output_enabled(self, enabled: bool) -> None:
         value = self.config.enable_output_value if enabled else self.config.disable_output_value
@@ -314,15 +328,40 @@ class SafeChannelController:
             parameter_instance=self.config.channel,
         )
 
-    def _set_output_setpoints(self, power: float, set_voltage: Optional[float], set_current: Optional[float], force_zero: bool = False) -> None:
+    def _set_output_setpoints(self, power: float, set_voltage: Optional[float], set_current: Optional[float], force_zero: bool = False) -> bool:
         specs = self.config.output_setpoint_parameters
         if "power" in specs:
             self._write_parameter(specs["power"], power)
-        else:
-            # As a conservative fallback, drive both available electrical setpoints to zero
-            # or to explicitly configured values. This avoids guessing a TEC1161-specific power
-            # parameter when the exact ID is not yet confirmed.
+            return True
+
+        voltage_spec = specs.get("voltage")
+        current_spec = specs.get("current")
+        if voltage_spec is not None or current_spec is not None:
+            voltage = 0.0 if force_zero else set_voltage
+            current = 0.0 if force_zero else set_current
+            if voltage_spec is not None and voltage is not None:
+                self._write_parameter(voltage_spec, voltage)
+            if current_spec is not None and current is not None:
+                self._write_parameter(current_spec, current)
+            return True
+
+        if self.config.allow_named_voltage_current_fallback:
+            # Legacy compatibility path for devices that do accept the generic named
+            # voltage/current commands. Keep this opt-in because some TEC1161 setups
+            # simply do not answer those commands, which can otherwise trigger a serial
+            # timeout before the run even starts.
             self._maybe_write_voltage_current(set_voltage=set_voltage, set_current=set_current, force_zero=force_zero)
+            return True
+
+        if not self._missing_output_setpoint_warning_emitted:
+            LOGGER.warning(
+                "No writable output setpoint parameter is configured for channel %s; "
+                "skipping power/voltage/current writes. Configure output_setpoint_parameters "
+                "or set allow_named_voltage_current_fallback=true if your device supports the generic commands.",
+                self.config.channel,
+            )
+            self._missing_output_setpoint_warning_emitted = True
+        return False
 
     def _maybe_write_voltage_current(self, set_voltage: Optional[float], set_current: Optional[float], force_zero: bool) -> None:
         voltage = 0.0 if force_zero else set_voltage
@@ -385,7 +424,7 @@ class TecCalibrationRunner:
                 self.safe_controller.arm()
                 reader = MeasurementReader(session, self.config.address, self.config.channel)
 
-                self.safe_controller.apply_zero_output(disable_output=False)
+                self.safe_controller.apply_zero_output(disable_output=True)
                 time.sleep(self.config.settle_seconds)
 
                 for index, step in enumerate(self.config.normalized_steps()):

@@ -77,6 +77,7 @@ Key top-level fields:
 - `dwell_seconds_default`: default dwell if a step does not override it
 - `settle_seconds`: short delay after forcing initial zero output
 - `output_stage_input_selection`: optional output-source selection written before each step
+- `allow_named_voltage_current_fallback`: optional compatibility switch; defaults to `false` because some TEC1161 setups time out on the generic named `Set Voltage` / `Set Current` commands
 - `steps`: the calibration table
 - `measurement_parameters`: additional measurements, including raw TEC1161 parameters
 - `low_resolution_temperature_parameters`: low-resolution temperature inputs to record
@@ -96,8 +97,11 @@ Each entry in `steps` may contain:
 - `metadata`: arbitrary step metadata that will be copied into the log record
 
 The script does not assume that the TEC1161 power command is already known.
-If you do **not** configure an explicit `output_setpoint_parameters.power`, it falls back to using the existing named MeCom commands `Set Voltage` and `Set Current`.
-That keeps the workflow usable while still avoiding guesses about an unknown TEC1161-specific power parameter.
+If you configure `output_setpoint_parameters.power`, the runner writes that parameter directly.
+
+If you instead configure `output_setpoint_parameters.voltage` and/or `output_setpoint_parameters.current`, the runner writes those explicit parameters.
+
+By default it does **not** fall back to the generic named MeCom commands `Set Voltage` and `Set Current`, because some TEC1161 setups do not respond to those commands and will time out over serial. If your controller is known to support those generic commands, you can opt back into the legacy behavior with `allow_named_voltage_current_fallback: true`.
 
 #### Does it store HR Input 1 and HR Input 2 differential voltage?
 
