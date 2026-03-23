@@ -50,6 +50,16 @@ python -m mecom.calibration --config examples/tec1161_calibration_config.example
 
 The `--verbose` flag enables INFO/DEBUG logging to the console so you can monitor a long run.
 
+#### Quick power-cycle test wrapper
+
+If you want a shorter proof-of-execution run that steps through several power outputs and records whether each dwell actually elapsed, use:
+
+```bash
+python power_cycle_test.py --config examples/power_cycle_test.example.json --verbose
+```
+
+This wrapper uses the same logging pipeline and writes metadata, JSONL, and CSV files. Each record includes `step_started_at`, `requested_dwell_seconds`, and `actual_dwell_seconds` so you can verify that the board moved through the requested loop and waited the expected time before measurements were logged.
+
 #### Configuration file overview
 
 The runner is configured entirely by JSON.

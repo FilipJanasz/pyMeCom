@@ -1,0 +1,64 @@
+{
+  "serial_port": "COM3",
+  "address": 1,
+  "channel": 1,
+  "timeout": 1.0,
+  "output_directory": "power_cycle_logs",
+  "run_name": "power_cycle_test",
+  "device_label": "TEC1161",
+  "dwell_seconds_default": 10,
+  "settle_seconds": 1.0,
+  "output_stage_input_selection": 0,
+  "steps": [
+    {
+      "name": "zero_baseline",
+      "power": 0.0,
+      "dwell_seconds": 5,
+      "set_voltage": 0.0,
+      "set_current": 0.0,
+      "metadata": {
+        "purpose": "Confirm a zero-output baseline before the loop starts"
+      }
+    },
+    {
+      "name": "power_25pct",
+      "power": 0.25,
+      "dwell_seconds": 10,
+      "set_voltage": 1.0,
+      "set_current": 0.25
+    },
+    {
+      "name": "power_50pct",
+      "power": 0.5,
+      "dwell_seconds": 10,
+      "set_voltage": 2.0,
+      "set_current": 0.5
+    },
+    {
+      "name": "power_75pct",
+      "power": 0.75,
+      "dwell_seconds": 10,
+      "set_voltage": 3.0,
+      "set_current": 0.75
+    },
+    {
+      "name": "power_100pct",
+      "power": 1.0,
+      "dwell_seconds": 10,
+      "set_voltage": 4.0,
+      "set_current": 1.0
+    }
+  ],
+  "measurement_parameters": [],
+  "low_resolution_temperature_parameters": [
+    {
+      "key": "object_temperature",
+      "parameter_name": "Object Temperature"
+    },
+    {
+      "key": "sink_temperature",
+      "parameter_name": "Sink Temperature"
+    }
+  ],
+  "raw_parameter_placeholders": []
+}
