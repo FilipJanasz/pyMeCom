@@ -43,6 +43,10 @@ class TimeoutOnOutputSelectionSession(DummySession):
 
 
 class SafeChannelControllerTests(unittest.TestCase):
+    def test_calibration_step_defaults_power_to_zero_for_legacy_step_configs(self):
+        step = CalibrationStep.from_dict({'name': 'legacy_step', 'set_voltage': 1.5, 'set_current': 0.3})
+        self.assertEqual(step.power, 0.0)
+
     def test_missing_output_setpoint_path_keeps_output_disabled(self):
         session = DummySession()
         config = CalibrationConfig(serial_port='COM1')
