@@ -80,7 +80,7 @@ class CalibrationStep:
     """One configured calibration step."""
 
     name: str
-    power: float
+    power: float = 0.0
     dwell_seconds: int = DEFAULT_STEP_DWELL_SECONDS
     set_voltage: Optional[float] = None
     set_current: Optional[float] = None
@@ -89,7 +89,9 @@ class CalibrationStep:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "CalibrationStep":
-        return cls(**data)
+        payload = dict(data)
+        payload.setdefault("power", 0.0)
+        return cls(**payload)
 
 
 @dataclass
