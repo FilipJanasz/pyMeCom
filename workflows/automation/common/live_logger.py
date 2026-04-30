@@ -8,7 +8,7 @@ import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from mecom.calibration import CalibrationStep, SafeChannelController
 from mecom.mecom import MeComSerial, MeComTcp
@@ -171,13 +171,22 @@ class LiveLogger:
             )
         raise ValueError("transport must be one of: com, tcp")
 
-    def run(self, hz: float = 1.0, duration_seconds: Optional[float] = None) -> Path:
+    def run(
+        self,
+        hz: float = 1.0,
+        duration_seconds: Optional[float] = None,
+        started_callback: Optional[Callable[[Path], None]] = None,
+        row_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
+    ) -> Path:
         interval = 1.0 / hz
         out_dir = Path(self.config.output_directory)
         out_dir.mkdir(parents=True, exist_ok=True)
         started_at = datetime.now(timezone.utc)
         stem = f"{self.config.output_prefix}_{started_at.strftime('%Y%m%d_%H%M%S')}"
         csv_path = out_dir / f"{stem}.csv"
+
+        if started_callback is not None:
+            started_callback(csv_path)
 
         fields = ["Time", "Milliseconds", "OLE Automation Date"] + [spec.label for spec in self.config.parameters]
         session_manager, endpoint = self._open_session()
@@ -235,6 +244,8 @@ class LiveLogger:
                     row[spec.label] = self._read_parameter(session, spec)
                 writer.writerow(row)
                 handle.flush()
+                if row_callback is not None:
+                    row_callback(row)
 
                 if schedule and step_deadline is not None and time.monotonic() >= step_deadline:
                     schedule_index += 1
