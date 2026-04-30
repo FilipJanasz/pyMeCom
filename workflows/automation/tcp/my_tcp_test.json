@@ -1,0 +1,37 @@
+{
+  "transport": "tcp",
+  "host": "192.168.0.50",
+  "port": 50000,
+  "timeout": 1.0,
+
+  "address": 1,
+  "channel": 1,
+
+  "output_directory": "calibration_logs",
+  "run_name": "tcp_smoke_test",
+  "device_label": "TEC1161",
+
+  "dwell_seconds_default": 10,
+  "settle_seconds": 2,
+
+  "allow_named_voltage_current_fallback": true,
+
+  "steps": [
+    {
+      "name": "zero_baseline",
+      "power": 0.0,
+      "dwell_seconds": 10,
+      "set_voltage": 0.0,
+      "set_current": 0.0,
+      "enable_output": false
+    },
+    {
+      "name": "low_power_step",
+      "power": 0.2,
+      "dwell_seconds": 10,
+      "set_voltage": 1.0,
+      "set_current": 0.2,
+      "enable_output": true
+    }
+  ]
+}
