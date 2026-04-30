@@ -249,12 +249,12 @@ This is by no means a polished software, contribution by submitting to this repo
 ## Citation
 Cite as `Pomjaksilp, Suthep et al. (2024). pyMeCom 1.0. Zenodo. 10.5281/zenodo.11233757`
 
-## Transport split workspace (COM/TCP)
+## Workflows workspace (COM/TCP automation)
 
 To keep the current serial workflow stable while preparing a TCP variant, use:
 
-- `variants/com` for COM/serial-specific templates and wrappers
-- `variants/tcp` for TCP-specific templates and wrappers
-- `variants/common` for transport-agnostic shared assets
+- `workflows/automation/com` for COM/serial-specific templates and wrappers
+- `workflows/automation/tcp` for TCP-specific templates and wrappers
+- `workflows/automation/common` for transport-agnostic shared assets
 
 This split is additive and does not change the existing root-level serial scripts.
