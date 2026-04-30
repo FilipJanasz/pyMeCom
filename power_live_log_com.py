@@ -12,7 +12,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Continuous 1Hz COM logger with Meerstetter-style CSV headers")
     parser.add_argument("--config", required=True, help="Path to JSON config")
     parser.add_argument("--hz", type=float, default=1.0, help="Sample rate in Hz (default: 1.0)")
-    parser.add_argument("--duration-seconds", type=float, default=None, help="Optional duration limit")
+    parser.add_argument("--duration-seconds", type=float, default=None, help="Optional duration limit (overrides config)")
     parser.add_argument("--verbose", action="store_true", help="Enable debug logs")
     args = parser.parse_args(argv)
 
@@ -20,7 +20,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     config = LiveLoggerConfig.from_json_file(args.config)
     logger = LiveLogger(config)
     try:
-        output = logger.run(hz=args.hz, duration_seconds=args.duration_seconds)
+        duration_seconds = args.duration_seconds if args.duration_seconds is not None else config.duration_seconds
+        output = logger.run(hz=args.hz, duration_seconds=duration_seconds)
     except KeyboardInterrupt:
         return 130
     print(output)

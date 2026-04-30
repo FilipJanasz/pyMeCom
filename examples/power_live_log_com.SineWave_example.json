@@ -1,0 +1,261 @@
+{
+  "transport": "com",
+  "serial_port": "COM3",
+  "serial_port_autodetect": false,
+  "serial_port_hint": "Silicon Labs",
+  "address": 2,
+  "channel": 1,
+  "baudrate": 57600,
+  "timeout": 1.0,
+  "tcp_host": null,
+  "tcp_port": 50000,
+  "output_directory": "live_logs",
+  "write_metadata_sidecar": true,
+  "allow_named_voltage_current_fallback": true,
+  "parameters": [
+    {
+      "key": "error_number",
+      "label": "105.1: Error Number",
+      "parameter_name": "Error Number",
+      "instance": 1
+    },
+    {
+      "key": "ch1_nom_i",
+      "label": "1012.1: CH1 Nom I",
+      "parameter_id": 1012,
+      "parameter_format": "FLOAT32",
+      "instance": 1
+    },
+    {
+      "key": "ch1_nom_u",
+      "label": "1013.1: CH1 Nom U",
+      "parameter_id": 1013,
+      "parameter_format": "FLOAT32",
+      "instance": 1
+    },
+    {
+      "key": "ch1_act_i",
+      "label": "1020.1: CH1 Act I",
+      "parameter_name": "Actual Output Current",
+      "instance": 1
+    },
+    {
+      "key": "ch1_act_u",
+      "label": "1021.1: CH1 Act U",
+      "parameter_name": "Actual Output Voltage",
+      "instance": 1
+    },
+    {
+      "key": "ch1_act_p",
+      "label": "1022.1: CH1 Act P",
+      "parameter_name": "Actual Output Power",
+      "instance": 1
+    },
+    {
+      "key": "lr1_temp",
+      "label": "1044.1: LR1 Temp",
+      "parameter_id": 1044,
+      "parameter_format": "FLOAT32",
+      "instance": 1
+    },
+    {
+      "key": "lr2_temp",
+      "label": "1044.2: LR2 Temp",
+      "parameter_id": 1044,
+      "parameter_format": "FLOAT32",
+      "instance": 2
+    },
+    {
+      "key": "hr1_temp",
+      "label": "1045.1: HR1 Temp",
+      "parameter_id": 1045,
+      "parameter_format": "FLOAT32",
+      "instance": 1
+    },
+    {
+      "key": "hr2_temp",
+      "label": "1045.2: HR2 Temp",
+      "parameter_id": 1045,
+      "parameter_format": "FLOAT32",
+      "instance": 2
+    },
+    {
+      "key": "diff_voltage_1",
+      "label": "1046.1: Differential Voltage",
+      "parameter_id": 1046,
+      "parameter_format": "FLOAT32",
+      "instance": 1
+    },
+    {
+      "key": "diff_voltage_2",
+      "label": "1046.2: Differential Voltage",
+      "parameter_id": 1046,
+      "parameter_format": "FLOAT32",
+      "instance": 2
+    }
+  ],
+  "duration_seconds": 20,
+  "output_prefix": "tec1161_sine_20s",
+  "power_schedule": [
+    {
+      "name": "s00",
+      "power": 0.0,
+      "set_voltage": 0.0,
+      "set_current": 0.5,
+      "duration_seconds": 1,
+      "enable_output": true
+    },
+    {
+      "name": "s01",
+      "power": 0.0,
+      "set_voltage": 0.618,
+      "set_current": 0.5,
+      "duration_seconds": 1,
+      "enable_output": true
+    },
+    {
+      "name": "s02",
+      "power": 0.0,
+      "set_voltage": 1.176,
+      "set_current": 0.5,
+      "duration_seconds": 1,
+      "enable_output": true
+    },
+    {
+      "name": "s03",
+      "power": 0.0,
+      "set_voltage": 1.618,
+      "set_current": 0.5,
+      "duration_seconds": 1,
+      "enable_output": true
+    },
+    {
+      "name": "s04",
+      "power": 0.0,
+      "set_voltage": 1.902,
+      "set_current": 0.5,
+      "duration_seconds": 1,
+      "enable_output": true
+    },
+    {
+      "name": "s05",
+      "power": 0.0,
+      "set_voltage": 2.0,
+      "set_current": 0.5,
+      "duration_seconds": 1,
+      "enable_output": true
+    },
+    {
+      "name": "s06",
+      "power": 0.0,
+      "set_voltage": 1.902,
+      "set_current": 0.5,
+      "duration_seconds": 1,
+      "enable_output": true
+    },
+    {
+      "name": "s07",
+      "power": 0.0,
+      "set_voltage": 1.618,
+      "set_current": 0.5,
+      "duration_seconds": 1,
+      "enable_output": true
+    },
+    {
+      "name": "s08",
+      "power": 0.0,
+      "set_voltage": 1.176,
+      "set_current": 0.5,
+      "duration_seconds": 1,
+      "enable_output": true
+    },
+    {
+      "name": "s09",
+      "power": 0.0,
+      "set_voltage": 0.618,
+      "set_current": 0.5,
+      "duration_seconds": 1,
+      "enable_output": true
+    },
+    {
+      "name": "s10",
+      "power": 0.0,
+      "set_voltage": 0.0,
+      "set_current": 0.5,
+      "duration_seconds": 1,
+      "enable_output": true
+    },
+    {
+      "name": "s11",
+      "power": 0.0,
+      "set_voltage": -0.618,
+      "set_current": 0.5,
+      "duration_seconds": 1,
+      "enable_output": true
+    },
+    {
+      "name": "s12",
+      "power": 0.0,
+      "set_voltage": -1.176,
+      "set_current": 0.5,
+      "duration_seconds": 1,
+      "enable_output": true
+    },
+    {
+      "name": "s13",
+      "power": 0.0,
+      "set_voltage": -1.618,
+      "set_current": 0.5,
+      "duration_seconds": 1,
+      "enable_output": true
+    },
+    {
+      "name": "s14",
+      "power": 0.0,
+      "set_voltage": -1.902,
+      "set_current": 0.5,
+      "duration_seconds": 1,
+      "enable_output": true
+    },
+    {
+      "name": "s15",
+      "power": 0.0,
+      "set_voltage": -2.0,
+      "set_current": 0.5,
+      "duration_seconds": 1,
+      "enable_output": true
+    },
+    {
+      "name": "s16",
+      "power": 0.0,
+      "set_voltage": -1.902,
+      "set_current": 0.5,
+      "duration_seconds": 1,
+      "enable_output": true
+    },
+    {
+      "name": "s17",
+      "power": 0.0,
+      "set_voltage": -1.618,
+      "set_current": 0.5,
+      "duration_seconds": 1,
+      "enable_output": true
+    },
+    {
+      "name": "s18",
+      "power": 0.0,
+      "set_voltage": -1.176,
+      "set_current": 0.5,
+      "duration_seconds": 1,
+      "enable_output": true
+    },
+    {
+      "name": "s19",
+      "power": 0.0,
+      "set_voltage": -0.618,
+      "set_current": 0.5,
+      "duration_seconds": 1,
+      "enable_output": true
+    }
+  ]
+}
