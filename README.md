@@ -60,6 +60,28 @@ python power_cycle_test.py --config examples/power_cycle_test.example.json --ver
 
 This wrapper uses the same logging pipeline and writes metadata, JSONL, and CSV files. Each record includes `step_started_at`, `requested_dwell_seconds`, and `actual_dwell_seconds` so you can verify that the board moved through the requested loop and waited the expected time before measurements were logged.
 
+
+#### Production-ready template
+
+For production-oriented runs, start from:
+
+- `examples/tec1161_production_config.template.json`
+
+The production template differs from the short power-cycle example by:
+
+- using long dwell defaults (`1800` seconds),
+- disabling named voltage/current fallback by default,
+- requiring explicit writable output setpoint parameter IDs for power/voltage/current,
+- keeping placeholder entries for HR input IDs so unresolved calibration channels are visible.
+
+Recommended rollout:
+
+1. Validate connectivity with a short run in a non-production environment.
+2. Fill in confirmed writable output parameter IDs from your validated protocol table.
+3. Fill in HR/temperature raw measurement IDs as needed.
+4. Run a short staged smoke run with explicit log review.
+5. Only then use the 30-minute dwell schedule for unattended production calibration.
+
 #### Configuration file overview
 
 The runner is configured entirely by JSON.
