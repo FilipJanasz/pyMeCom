@@ -20,18 +20,6 @@
       "instance": 1
     },
     {
-      "key": "error_inst",
-      "label": "106.1: Error Inst",
-      "parameter_name": "Error Instance",
-      "instance": 1
-    },
-    {
-      "key": "error_param",
-      "label": "107.1: Error Param",
-      "parameter_name": "Error Parameter",
-      "instance": 1
-    },
-    {
       "key": "ch1_nom_i",
       "label": "1012.1: CH1 Nom I",
       "parameter_id": 1012,
@@ -125,5 +113,6 @@
       "duration_seconds": 300,
       "enable_output": true
     }
-  ]
+  ],
+  "duration_seconds": 10
 }
