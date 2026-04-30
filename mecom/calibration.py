@@ -113,6 +113,7 @@ class CalibrationConfig:
     output_stage_input_selection: Optional[int] = None
     allow_named_voltage_current_fallback: bool = False
     write_header_metadata: bool = True
+    notes: Optional[str] = None
     steps: List[CalibrationStep] = field(default_factory=list)
     measurement_parameters: List[ParameterSpec] = field(default_factory=list)
     output_setpoint_parameters: Dict[str, ParameterSpec] = field(default_factory=dict)
