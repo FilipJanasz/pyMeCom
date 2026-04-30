@@ -1,7 +1,7 @@
 # Common assets for COM/TCP workflows
 
 This folder is intentionally transport-agnostic.
-Use it for files shared by both variants, such as:
+Use it for files shared by both transport workflows, such as:
 
 - Measurement schema docs
 - Post-processing notebooks/scripts
@@ -10,5 +10,5 @@ Use it for files shared by both variants, such as:
 
 The active transport-specific runtime files are in:
 
-- `variants/com`
-- `variants/tcp`
+- `workflows/automation/com`
+- `workflows/automation/tcp`

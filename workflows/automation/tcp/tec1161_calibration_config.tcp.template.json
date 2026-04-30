@@ -11,6 +11,6 @@
   "device_label": "TEC1161",
   "dwell_seconds_default": 30,
   "settle_seconds": 2,
-  "notes": "TCP template scaffold. Keep COM templates in variants/com unchanged.",
+  "notes": "TCP template scaffold. Keep COM templates in workflows/automation/com unchanged.",
   "steps": []
 }
