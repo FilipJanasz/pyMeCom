@@ -74,8 +74,6 @@ class LiveParameterSpec:
 def default_live_parameters(channel: int = 1) -> List[LiveParameterSpec]:
     return [
         LiveParameterSpec("error_number", f"105.1: Error Number", parameter_name="Error Number", instance=1),
-        LiveParameterSpec("error_inst", f"106.1: Error Inst", parameter_name="Error Instance", instance=1),
-        LiveParameterSpec("error_param", f"107.1: Error Param", parameter_name="Error Parameter", instance=1),
         LiveParameterSpec(f"ch{channel}_nom_i", f"1012.{channel}: CH{channel} Nom I", parameter_id=1012, parameter_format="FLOAT32", instance=channel),
         LiveParameterSpec(f"ch{channel}_nom_u", f"1013.{channel}: CH{channel} Nom U", parameter_id=1013, parameter_format="FLOAT32", instance=channel),
         LiveParameterSpec(f"ch{channel}_act_i", f"1020.{channel}: CH{channel} Act I", parameter_name="Actual Output Current", instance=channel),
@@ -122,6 +120,7 @@ class LiveLoggerConfig:
     parameters: List[LiveParameterSpec] = field(default_factory=list)
     power_schedule: List[PowerScheduleStep] = field(default_factory=list)
     allow_named_voltage_current_fallback: bool = False
+    duration_seconds: Optional[float] = None
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "LiveLoggerConfig":
@@ -140,6 +139,7 @@ class LiveLoggerConfig:
 class LiveLogger:
     def __init__(self, config: LiveLoggerConfig):
         self.config = config
+        self._read_failure_keys: set[str] = set()
 
     def resolve_serial_port(self) -> str:
         if self.config.serial_port:
@@ -272,7 +272,14 @@ class LiveLogger:
                 parameter_instance=spec.instance,
             )
         except Exception as exc:
-            LOGGER.debug("Read failed for %s: %s", spec.key, exc)
+            if spec.key not in self._read_failure_keys:
+                LOGGER.warning(
+                    "Read failed for %s (%s). Value will be logged as NaN. Error: %r",
+                    spec.key,
+                    spec.label,
+                    exc,
+                )
+                self._read_failure_keys.add(spec.key)
             return math.nan
 
 
