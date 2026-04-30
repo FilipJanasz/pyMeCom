@@ -2,6 +2,7 @@
   "transport": "com",
   "serial_port": null,
   "serial_port_autodetect": true,
+  "serial_port_hint": "Silicon Labs",
   "address": 1,
   "channel": 1,
   "baudrate": 57600,

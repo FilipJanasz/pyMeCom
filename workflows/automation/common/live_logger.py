@@ -29,7 +29,7 @@ def build_time_columns(now: datetime) -> Dict[str, Any]:
     }
 
 
-def autodetect_serial_port() -> Optional[str]:
+def autodetect_serial_port(port_hint: Optional[str] = None) -> Optional[str]:
     try:
         from serial.tools import list_ports
     except Exception:
@@ -39,6 +39,21 @@ def autodetect_serial_port() -> Optional[str]:
         return None
     # Keep selection deterministic and Windows-friendly (COMx first, then name sort)
     ports.sort(key=lambda p: (0 if str(p.device).upper().startswith("COM") else 1, str(p.device)))
+    if port_hint:
+        hint = port_hint.strip().lower()
+        if hint:
+            for port in ports:
+                haystack = " ".join(
+                    [
+                        str(getattr(port, "device", "") or ""),
+                        str(getattr(port, "name", "") or ""),
+                        str(getattr(port, "description", "") or ""),
+                        str(getattr(port, "manufacturer", "") or ""),
+                        str(getattr(port, "hwid", "") or ""),
+                    ]
+                ).lower()
+                if hint in haystack:
+                    return str(port.device)
     return str(ports[0].device)
 
 
@@ -94,6 +109,7 @@ class LiveLoggerConfig:
     transport: str = "com"
     serial_port: Optional[str] = None
     serial_port_autodetect: bool = True
+    serial_port_hint: Optional[str] = None
     address: int = 1
     channel: int = 1
     baudrate: int = 57600
@@ -129,9 +145,12 @@ class LiveLogger:
         if self.config.serial_port:
             return self.config.serial_port
         if self.config.serial_port_autodetect:
-            port = autodetect_serial_port()
+            port = autodetect_serial_port(self.config.serial_port_hint)
             if port:
-                LOGGER.info("Auto-detected serial port: %s", port)
+                if self.config.serial_port_hint:
+                    LOGGER.info("Auto-detected serial port using hint '%s': %s", self.config.serial_port_hint, port)
+                else:
+                    LOGGER.info("Auto-detected serial port: %s", port)
                 return port
         raise ValueError("No serial_port configured and auto-detect did not find any connected controller")
 
