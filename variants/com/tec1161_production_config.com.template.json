@@ -1,0 +1,110 @@
+{
+  "serial_port": "COM3",
+  "address": 2,
+  "channel": 1,
+  "baudrate": 57600,
+  "timeout": 2.0,
+  "output_directory": "production_calibration_logs",
+  "run_name": "tec1161_production_run",
+  "device_label": "TEC1161",
+  "dwell_seconds_default": 1800,
+  "settle_seconds": 2.0,
+  "enable_output_value": 1,
+  "disable_output_value": 0,
+  "allow_named_voltage_current_fallback": false,
+  "write_header_metadata": true,
+  "steps": [
+    {
+      "name": "zero_baseline",
+      "dwell_seconds": 1800,
+      "set_voltage": 0.0,
+      "set_current": 0.0,
+      "enable_output": false,
+      "metadata": {
+        "purpose": "Initial zero-output baseline"
+      }
+    },
+    {
+      "name": "power_25pct",
+      "dwell_seconds": 1800,
+      "set_voltage": 1.0,
+      "set_current": 0.25,
+      "enable_output": true
+    },
+    {
+      "name": "power_50pct",
+      "dwell_seconds": 1800,
+      "set_voltage": 2.0,
+      "set_current": 0.5,
+      "enable_output": true
+    },
+    {
+      "name": "power_75pct",
+      "dwell_seconds": 1800,
+      "set_voltage": 3.0,
+      "set_current": 0.75,
+      "enable_output": true
+    },
+    {
+      "name": "power_100pct",
+      "dwell_seconds": 1800,
+      "set_voltage": 4.0,
+      "set_current": 1.0,
+      "enable_output": true
+    }
+  ],
+  "output_setpoint_parameters": {
+    "power": {
+      "key": "output_power_setpoint",
+      "parameter_id": null,
+      "parameter_format": null,
+      "description": "Fill in confirmed writable TEC1161 output power parameter ID/format"
+    },
+    "voltage": {
+      "key": "output_voltage_setpoint",
+      "parameter_id": null,
+      "parameter_format": null,
+      "description": "Optional explicit voltage setpoint parameter"
+    },
+    "current": {
+      "key": "output_current_setpoint",
+      "parameter_id": null,
+      "parameter_format": null,
+      "description": "Optional explicit current setpoint parameter"
+    }
+  },
+  "measurement_parameters": [
+    {
+      "key": "hr_input_1_adc_differential_voltage",
+      "parameter_id": null,
+      "parameter_format": null,
+      "description": "Fill in confirmed TEC1161 ID/format"
+    },
+    {
+      "key": "hr_input_2_adc_differential_voltage",
+      "parameter_id": null,
+      "parameter_format": null,
+      "description": "Fill in confirmed TEC1161 ID/format"
+    }
+  ],
+  "low_resolution_temperature_parameters": [
+    {
+      "key": "object_temperature",
+      "parameter_name": "Object Temperature"
+    },
+    {
+      "key": "sink_temperature",
+      "parameter_name": "Sink Temperature"
+    }
+  ],
+  "raw_parameter_placeholders": [
+    {
+      "key": "confirm_output_setpoint_parameters",
+      "description": "Replace null output_setpoint_parameters with validated writable IDs before production use"
+    },
+    {
+      "key": "confirm_hr_input_ids",
+      "description": "Replace HR input placeholders with confirmed TEC1161 IDs"
+    }
+  ]
+}
