@@ -55,10 +55,18 @@ The `--verbose` flag enables INFO/DEBUG logging to the console so you can monito
 If you want a shorter proof-of-execution run that steps through several power outputs and records whether each dwell actually elapsed, use:
 
 ```bash
-python power_cycle_test.py --config examples/power_cycle_test.example.json --verbose
+python power_cycle_test_com.py --config examples/power_cycle_test.example.json --verbose
 ```
 
 This wrapper uses the same logging pipeline and writes metadata, JSONL, and CSV files. Each record includes `step_started_at`, `requested_dwell_seconds`, and `actual_dwell_seconds` so you can verify that the board moved through the requested loop and waited the expected time before measurements were logged.
+
+
+
+For TCP transport, use:
+
+```bash
+python power_cycle_test_tcp.py --config workflows/automation/tcp/tec1161_calibration_config.tcp.template.json --verbose
+```
 
 
 #### Production-ready template
