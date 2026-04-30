@@ -1,9 +1,9 @@
 {
   "transport": "com",
-  "serial_port": null,
-  "serial_port_autodetect": true,
+  "serial_port": "COM3",
+  "serial_port_autodetect": false,
   "serial_port_hint": "Silicon Labs",
-  "address": 1,
+  "address": 2,
   "channel": 1,
   "baudrate": 57600,
   "timeout": 1.0,
@@ -13,24 +13,105 @@
   "output_prefix": "tec1161_live",
   "write_metadata_sidecar": true,
   "parameters": [
-    {"key": "error_number", "label": "105.1: Error Number", "parameter_name": "Error Number", "instance": 1},
-    {"key": "error_inst", "label": "106.1: Error Inst", "parameter_name": "Error Instance", "instance": 1},
-    {"key": "error_param", "label": "107.1: Error Param", "parameter_name": "Error Parameter", "instance": 1},
-    {"key": "ch1_nom_i", "label": "1012.1: CH1 Nom I", "parameter_id": 1012, "parameter_format": "FLOAT32", "instance": 1},
-    {"key": "ch1_nom_u", "label": "1013.1: CH1 Nom U", "parameter_id": 1013, "parameter_format": "FLOAT32", "instance": 1},
-    {"key": "ch1_act_i", "label": "1020.1: CH1 Act I", "parameter_name": "Actual Output Current", "instance": 1},
-    {"key": "ch1_act_u", "label": "1021.1: CH1 Act U", "parameter_name": "Actual Output Voltage", "instance": 1},
-    {"key": "ch1_act_p", "label": "1022.1: CH1 Act P", "parameter_name": "Actual Output Power", "instance": 1},
-    {"key": "lr1_temp", "label": "1044.1: LR1 Temp", "parameter_id": 1044, "parameter_format": "FLOAT32", "instance": 1},
-    {"key": "lr2_temp", "label": "1044.2: LR2 Temp", "parameter_id": 1044, "parameter_format": "FLOAT32", "instance": 2},
-    {"key": "hr1_temp", "label": "1045.1: HR1 Temp", "parameter_id": 1045, "parameter_format": "FLOAT32", "instance": 1},
-    {"key": "hr2_temp", "label": "1045.2: HR2 Temp", "parameter_id": 1045, "parameter_format": "FLOAT32", "instance": 2},
-    {"key": "diff_voltage_1", "label": "1046.1: Differential Voltage", "parameter_id": 1046, "parameter_format": "FLOAT32", "instance": 1},
-    {"key": "diff_voltage_2", "label": "1046.2: Differential Voltage", "parameter_id": 1046, "parameter_format": "FLOAT32", "instance": 2}
+    {
+      "key": "error_number",
+      "label": "105.1: Error Number",
+      "parameter_name": "Error Number",
+      "instance": 1
+    },
+    {
+      "key": "ch1_nom_i",
+      "label": "1012.1: CH1 Nom I",
+      "parameter_id": 1012,
+      "parameter_format": "FLOAT32",
+      "instance": 1
+    },
+    {
+      "key": "ch1_nom_u",
+      "label": "1013.1: CH1 Nom U",
+      "parameter_id": 1013,
+      "parameter_format": "FLOAT32",
+      "instance": 1
+    },
+    {
+      "key": "ch1_act_i",
+      "label": "1020.1: CH1 Act I",
+      "parameter_name": "Actual Output Current",
+      "instance": 1
+    },
+    {
+      "key": "ch1_act_u",
+      "label": "1021.1: CH1 Act U",
+      "parameter_name": "Actual Output Voltage",
+      "instance": 1
+    },
+    {
+      "key": "ch1_act_p",
+      "label": "1022.1: CH1 Act P",
+      "parameter_name": "Actual Output Power",
+      "instance": 1
+    },
+    {
+      "key": "lr1_temp",
+      "label": "1044.1: LR1 Temp",
+      "parameter_id": 1044,
+      "parameter_format": "FLOAT32",
+      "instance": 1
+    },
+    {
+      "key": "lr2_temp",
+      "label": "1044.2: LR2 Temp",
+      "parameter_id": 1044,
+      "parameter_format": "FLOAT32",
+      "instance": 2
+    },
+    {
+      "key": "hr1_temp",
+      "label": "1045.1: HR1 Temp",
+      "parameter_id": 1045,
+      "parameter_format": "FLOAT32",
+      "instance": 1
+    },
+    {
+      "key": "hr2_temp",
+      "label": "1045.2: HR2 Temp",
+      "parameter_id": 1045,
+      "parameter_format": "FLOAT32",
+      "instance": 2
+    },
+    {
+      "key": "diff_voltage_1",
+      "label": "1046.1: Differential Voltage",
+      "parameter_id": 1046,
+      "parameter_format": "FLOAT32",
+      "instance": 1
+    },
+    {
+      "key": "diff_voltage_2",
+      "label": "1046.2: Differential Voltage",
+      "parameter_id": 1046,
+      "parameter_format": "FLOAT32",
+      "instance": 2
+    }
   ],
   "power_schedule": [
-    {"name": "zero", "power": 0.0, "duration_seconds": 60, "enable_output": false},
-    {"name": "step_25", "power": 0.25, "duration_seconds": 300, "enable_output": true},
-    {"name": "step_50", "power": 0.50, "duration_seconds": 300, "enable_output": true}
+    {
+      "name": "zero",
+      "power": 0.0,
+      "duration_seconds": 60,
+      "enable_output": false
+    },
+    {
+      "name": "step_25",
+      "power": 0.25,
+      "duration_seconds": 300,
+      "enable_output": true
+    },
+    {
+      "name": "step_50",
+      "power": 0.5,
+      "duration_seconds": 300,
+      "enable_output": true
+    }
   ]
 }
