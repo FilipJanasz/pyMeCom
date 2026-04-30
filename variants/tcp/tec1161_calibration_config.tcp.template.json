@@ -1,0 +1,16 @@
+{
+  "transport": "tcp",
+  "host": "192.168.0.50",
+  "port": 50000,
+  "timeout": 1.0,
+  "address": 1,
+  "channel": 1,
+  "baudrate": null,
+  "output_directory": "calibration_logs",
+  "run_name": "tcp_run",
+  "device_label": "TEC1161",
+  "dwell_seconds_default": 30,
+  "settle_seconds": 2,
+  "notes": "TCP template scaffold. Keep COM templates in variants/com unchanged.",
+  "steps": []
+}

@@ -1,0 +1,64 @@
+{
+  "serial_port": "/dev/ttyUSB0",
+  "address": 1,
+  "channel": 1,
+  "timeout": 1.0,
+  "output_directory": "calibration_logs",
+  "run_name": "tec1161_example",
+  "device_label": "TEC1161",
+  "dwell_seconds_default": 1800,
+  "settle_seconds": 1.0,
+  "steps": [
+    {
+      "name": "zero_baseline",
+      "dwell_seconds": 1800,
+      "set_voltage": 0.0,
+      "set_current": 0.0,
+      "metadata": {
+        "purpose": "Initial 30-minute zero-output baseline"
+      }
+    },
+    {
+      "name": "power_25pct",
+      "dwell_seconds": 1800,
+      "set_voltage": 1.0,
+      "set_current": 0.25
+    },
+    {
+      "name": "power_50pct",
+      "dwell_seconds": 1800,
+      "set_voltage": 2.0,
+      "set_current": 0.5
+    }
+  ],
+  "measurement_parameters": [
+    {
+      "key": "hr_input_1_adc_differential_voltage",
+      "parameter_id": null,
+      "parameter_format": null,
+      "description": "Replace with the confirmed TEC1161 HR Input 1 / ADC / Differential Voltage parameter ID"
+    },
+    {
+      "key": "hr_input_2_adc_differential_voltage",
+      "parameter_id": null,
+      "parameter_format": null,
+      "description": "Replace with the confirmed TEC1161 HR Input 2 / ADC / Differential Voltage parameter ID"
+    }
+  ],
+  "low_resolution_temperature_parameters": [
+    {
+      "key": "object_temperature",
+      "parameter_name": "Object Temperature"
+    },
+    {
+      "key": "sink_temperature",
+      "parameter_name": "Sink Temperature"
+    }
+  ],
+  "raw_parameter_placeholders": [
+    {
+      "key": "confirm_hr_input_ids",
+      "description": "Review TEC Controller Communication Protocol 5136AT.pdf and verify the exact raw IDs/formats before production use"
+    }
+  ]
+}
