@@ -65,6 +65,7 @@ class LiveParameterSpec:
     parameter_id: Optional[int] = None
     parameter_format: Optional[str] = None
     instance: int = 1
+    value: Optional[Any] = None
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "LiveParameterSpec":
@@ -116,12 +117,15 @@ class LiveLoggerConfig:
     power_schedule: List[PowerScheduleStep] = field(default_factory=list)
     allow_named_voltage_current_fallback: bool = False
     duration_seconds: Optional[float] = None
+    acquisition_hz: float = 10.0
     csv_flush_every_rows: int = 1
+    channel_setup_parameters: List[LiveParameterSpec] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "LiveLoggerConfig":
         payload = dict(data)
         payload["parameters"] = [LiveParameterSpec.from_dict(item) for item in payload.get("parameters", [])]
+        payload["channel_setup_parameters"] = [LiveParameterSpec.from_dict(item) for item in payload.get("channel_setup_parameters", [])]
         payload["power_schedule"] = [PowerScheduleStep.from_dict(item) for item in payload.get("power_schedule", [])]
         valid_keys = set(cls.__dataclass_fields__.keys())
         filtered_payload = {key: value for key, value in payload.items() if key in valid_keys}
@@ -171,7 +175,7 @@ class LiveLogger:
 
     def run(
         self,
-        hz: float = 1.0,
+        hz: float = 10.0,
         duration_seconds: Optional[float] = None,
         started_callback: Optional[Callable[[Path], None]] = None,
         row_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
@@ -219,6 +223,7 @@ class LiveLogger:
                 },
             )()
             controller = SafeChannelController(session, channel_config)
+            self._apply_channel_setup_parameters(session)
 
             schedule = list(self.config.power_schedule)
             schedule_index = 0
@@ -280,6 +285,22 @@ class LiveLogger:
             if rows_since_flush > 0:
                 handle.flush()
         return csv_path
+
+    def _apply_channel_setup_parameters(self, session: MeComSerial) -> None:
+        for spec in self.config.channel_setup_parameters:
+            if spec.parameter_id is None or spec.parameter_format is None:
+                LOGGER.warning(
+                    "Skipping channel setup parameter '%s' because parameter_id or parameter_format is missing.",
+                    spec.key,
+                )
+                continue
+            session.set_parameter_raw(
+                value=spec.value,
+                parameter_id=spec.parameter_id,
+                parameter_format=spec.parameter_format,
+                address=self.config.address,
+                parameter_instance=spec.instance,
+            )
 
     def _read_parameter(self, session: MeComSerial, spec: LiveParameterSpec) -> Any:
         try:
