@@ -9,7 +9,7 @@ from dataclasses import asdict
 from pathlib import Path
 from tkinter import BOTH, END, LEFT, RIGHT, VERTICAL, Button, Checkbutton, Entry, Frame, IntVar, Label, Listbox, Scrollbar, StringVar, Tk, filedialog, messagebox
 
-from workflows.automation.common.live_logger import LiveLogger, LiveLoggerConfig, PowerScheduleStep, default_live_parameters
+from workflows.automation.common.live_logger import CalibrationStep, LiveLogger, LiveLoggerConfig, PowerScheduleStep, SafeChannelController, default_live_parameters
 
 try:
     import matplotlib.dates as mdates
@@ -22,6 +22,8 @@ except Exception:
 
 LAST_CONFIG_PATH = Path('.last_live_logger_gui_config')
 MAX_POINTS = 600
+MIN_HZ = 0.1
+MAX_HZ = 20.0
 
 
 class LiveLoggerGui:
@@ -54,6 +56,8 @@ class LiveLoggerGui:
         self.animating = False
         self.stop_requested = False
         self.status_text = StringVar(value='Controller status: unknown')
+        self.sample_rate_text = StringVar(value='Measured acquisition rate: n/a')
+        self._last_sample_ts: float | None = None
 
         self._build_ui()
         self._load_last_used_config_if_present()
@@ -87,7 +91,7 @@ class LiveLoggerGui:
         add_row('Serial Hint', self.serial_hint, 2)
         add_row('Address', self.address, 3)
         add_row('Channel', self.channel, 4)
-        add_row('Hz', self.hz, 5)
+        add_row(f'Hz ({MIN_HZ:g}-{MAX_HZ:g})', self.hz, 5)
         add_row('Duration Seconds (blank=run forever)', self.duration, 6)
         Button(conn_frame, text='Detect TEC', command=self.detect_controller).grid(row=7, column=1, sticky='w')
         Label(io_frame, text='Output Directory').grid(row=3, column=0, sticky='w')
@@ -96,6 +100,7 @@ class LiveLoggerGui:
         Entry(io_frame, textvariable=self.output_prefix, width=42).grid(row=4, column=1, columnspan=4, sticky='we')
 
         Label(top, textvariable=self.status_text).grid(row=1, column=0, columnspan=2, sticky='w', pady=(6, 0))
+        Label(top, textvariable=self.sample_rate_text).grid(row=2, column=0, columnspan=2, sticky='w')
         conn_frame.grid_columnconfigure(1, weight=1)
         io_frame.grid_columnconfigure(1, weight=1)
 
@@ -104,7 +109,9 @@ class LiveLoggerGui:
         Button(buttons, text='Start Logging', command=self.start_logging).pack(side=LEFT, padx=(0, 6))
         Button(buttons, text='Force Stop', command=self.force_stop).pack(side=LEFT, padx=(0, 6))
         Button(buttons, text='Select Columns for Live Plot', command=self.apply_plot_selection).pack(side=LEFT)
+        Button(buttons, text='Clear Plot', command=self.clear_plot).pack(side=LEFT, padx=(6, 0))
         Button(buttons, text='Use selection for Plot 2', command=self.apply_second_plot_selection).pack(side=LEFT, padx=(6, 0))
+        Button(buttons, text='Zero TEC Output', command=self.zero_output).pack(side=LEFT, padx=(6, 0))
 
         mid = Frame(self.root, padx=8, pady=4)
         mid.pack(fill=BOTH, expand=True)
@@ -278,6 +285,15 @@ class LiveLoggerGui:
             return
 
         self.stop_requested = False
+        self._last_sample_ts = None
+        try:
+            hz = float(self.hz.get())
+        except ValueError:
+            messagebox.showerror('Invalid Hz', f'Acquisition rate must be a number between {MIN_HZ:g} and {MAX_HZ:g} Hz.')
+            return
+        if hz < MIN_HZ or hz > MAX_HZ:
+            messagebox.showerror('Invalid Hz', f'Acquisition rate must be between {MIN_HZ:g} and {MAX_HZ:g} Hz for TEC polling.')
+            return
         cfg = self._build_config()
         self.columns_list.delete(0, END)
         for spec in cfg.parameters:
@@ -306,6 +322,10 @@ class LiveLoggerGui:
             if isinstance(t, (float, int)):
                 unix_ts = (float(t) - 25569.0) * 86400.0
                 self.sample_index.append(unix_ts)
+                if self._last_sample_ts is not None and unix_ts > self._last_sample_ts:
+                    measured = 1.0 / (unix_ts - self._last_sample_ts)
+                    self.root.after(0, lambda m=measured: self.sample_rate_text.set(f'Measured acquisition rate: {m:.2f} Hz'))
+                self._last_sample_ts = unix_ts
             else:
                 self.sample_index.append(datetime.now(timezone.utc).timestamp())
             for col in self.selected_cols:
@@ -326,7 +346,7 @@ class LiveLoggerGui:
         def worker() -> None:
             try:
                 LiveLogger(cfg).run(
-                    hz=float(self.hz.get()),
+                    hz=hz,
                     duration_seconds=cfg.duration_seconds,
                     started_callback=on_started,
                     row_callback=on_row,
@@ -424,6 +444,46 @@ class LiveLoggerGui:
 
     def force_stop(self) -> None:
         self.stop_requested = True
+
+    def clear_plot(self) -> None:
+        self.sample_index.clear()
+        self.live_data.clear()
+        self._last_sample_ts = None
+        self.sample_rate_text.set('Measured acquisition rate: n/a')
+        self._redraw_plot()
+
+    def zero_output(self) -> None:
+        try:
+            logger = LiveLogger(self._build_config())
+            session_manager, endpoint = logger._open_session()
+            channel_config = type(
+                'LiveChannelConfig',
+                (),
+                {
+                    'address': int(self.address.get()),
+                    'channel': int(self.channel.get()),
+                    'enable_output_value': 1,
+                    'disable_output_value': 0,
+                    'output_setpoint_parameters': {},
+                    'allow_named_voltage_current_fallback': True,
+                    'output_stage_input_selection': None,
+                },
+            )()
+            with session_manager as session:
+                controller = SafeChannelController(session, channel_config)
+                controller.apply_step(
+                    CalibrationStep(
+                        name='gui_zero_output',
+                        power=0.0,
+                        dwell_seconds=1,
+                        set_voltage=0.0,
+                        set_current=0.0,
+                        enable_output=False,
+                    )
+                )
+            self.status_text.set(f'Controller status: output forced to zero ({endpoint})')
+        except Exception as exc:
+            messagebox.showerror('Zero output failed', str(exc))
 
     def detect_controller(self) -> None:
         try:
