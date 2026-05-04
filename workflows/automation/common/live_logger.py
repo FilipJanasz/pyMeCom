@@ -74,8 +74,6 @@ class LiveParameterSpec:
 def default_live_parameters(channel: int = 1) -> List[LiveParameterSpec]:
     return [
         LiveParameterSpec("error_number", f"105.1: Error Number", parameter_name="Error Number", instance=1),
-        LiveParameterSpec(f"ch{channel}_nom_i", f"1012.{channel}: CH{channel} Nom I", parameter_id=1012, parameter_format="FLOAT32", instance=channel),
-        LiveParameterSpec(f"ch{channel}_nom_u", f"1013.{channel}: CH{channel} Nom U", parameter_id=1013, parameter_format="FLOAT32", instance=channel),
         LiveParameterSpec(f"ch{channel}_act_i", f"1020.{channel}: CH{channel} Act I", parameter_id=1020, parameter_format="FLOAT32", instance=channel),
         LiveParameterSpec(f"ch{channel}_act_u", f"1021.{channel}: CH{channel} Act U", parameter_id=1021, parameter_format="FLOAT32", instance=channel),
         LiveParameterSpec(f"ch{channel}_act_p", f"1022.{channel}: CH{channel} Act P", parameter_name="Actual Output Power", instance=channel),

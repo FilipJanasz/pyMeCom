@@ -20,20 +20,6 @@
       "instance": 1
     },
     {
-      "key": "ch1_nom_i",
-      "label": "1012.1: CH1 Nom I",
-      "parameter_id": 1012,
-      "parameter_format": "FLOAT32",
-      "instance": 1
-    },
-    {
-      "key": "ch1_nom_u",
-      "label": "1013.1: CH1 Nom U",
-      "parameter_id": 1013,
-      "parameter_format": "FLOAT32",
-      "instance": 1
-    },
-    {
       "key": "ch1_act_i",
       "label": "1020.1: CH1 Act I",
       "parameter_id": 1020,
