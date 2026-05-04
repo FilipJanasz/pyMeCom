@@ -257,23 +257,25 @@ class LiveLogger:
                 if row_callback is not None:
                     row_callback(row)
 
-                if schedule and step_deadline is not None and time.monotonic() >= step_deadline:
-                    schedule_index += 1
-                    if schedule_index < len(schedule):
-                        step = schedule[schedule_index]
-                        controller.apply_step(
-                            CalibrationStep(
-                                name=step.name,
-                                power=step.power,
-                                dwell_seconds=max(1, int(step.duration_seconds)),
-                                set_voltage=step.set_voltage,
-                                set_current=step.set_current,
-                                enable_output=step.enable_output,
+                if schedule and step_deadline is not None:
+                    now_mono = time.monotonic()
+                    while schedule and step_deadline is not None and now_mono >= step_deadline:
+                        schedule_index += 1
+                        if schedule_index < len(schedule):
+                            step = schedule[schedule_index]
+                            controller.apply_step(
+                                CalibrationStep(
+                                    name=step.name,
+                                    power=step.power,
+                                    dwell_seconds=max(1, int(step.duration_seconds)),
+                                    set_voltage=step.set_voltage,
+                                    set_current=step.set_current,
+                                    enable_output=step.enable_output,
+                                )
                             )
-                        )
-                        step_deadline = time.monotonic() + max(0.0, step.duration_seconds)
-                    else:
-                        schedule = []
+                            step_deadline += max(0.0, step.duration_seconds)
+                        else:
+                            schedule = []
 
                 if stop_requested is not None and stop_requested():
                     break
