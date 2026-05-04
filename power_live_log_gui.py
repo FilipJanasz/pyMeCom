@@ -313,7 +313,8 @@ class LiveLoggerGui:
                     stop_requested=lambda: self.stop_requested,
                 )
             except Exception as exc:
-                self.root.after(0, lambda: messagebox.showerror('Run failed', str(exc)))
+                error_message = str(exc)
+                self.root.after(0, lambda msg=error_message: messagebox.showerror('Run failed', msg))
             finally:
                 self.animating = False
 
