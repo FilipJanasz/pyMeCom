@@ -36,13 +36,15 @@
     {
       "key": "ch1_act_i",
       "label": "1020.1: CH1 Act I",
-      "parameter_name": "Actual Output Current",
+      "parameter_id": 1020,
+      "parameter_format": "FLOAT32",
       "instance": 1
     },
     {
       "key": "ch1_act_u",
       "label": "1021.1: CH1 Act U",
-      "parameter_name": "Actual Output Voltage",
+      "parameter_id": 1021,
+      "parameter_format": "FLOAT32",
       "instance": 1
     },
     {
@@ -66,20 +68,6 @@
       "instance": 2
     },
     {
-      "key": "hr1_temp",
-      "label": "1045.1: HR1 Temp",
-      "parameter_id": 1045,
-      "parameter_format": "FLOAT32",
-      "instance": 1
-    },
-    {
-      "key": "hr2_temp",
-      "label": "1045.2: HR2 Temp",
-      "parameter_id": 1045,
-      "parameter_format": "FLOAT32",
-      "instance": 2
-    },
-    {
       "key": "diff_voltage_1",
       "label": "1046.1: Differential Voltage",
       "parameter_id": 1046,
@@ -94,7 +82,7 @@
       "instance": 2
     }
   ],
-  "duration_seconds": 20,
+  "duration_seconds": 10,
   "output_prefix": "tec1161_step_20s",
   "power_schedule": [
     {
@@ -129,6 +117,5 @@
       "duration_seconds": 5,
       "enable_output": true
     }
-  ],
-  "duration_seconds": 10
+  ]
 }
