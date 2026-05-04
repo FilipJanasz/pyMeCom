@@ -15,6 +15,20 @@ This package was developed to control several TEC devices on a raspberry pi by c
 ## Usage
 For a basic example look at `mecom/mecom.py`, the `__main__` part contains an example communication.
 
+
+### Throughput tuning (serial and sine-wave style workloads)
+
+If you are driving fast setpoint updates and/or high-rate logging, end-to-end throughput is usually limited by request/response round trips on the serial link.
+
+Practical knobs:
+
+- `MeComSerial` no longer clears input/output buffers before every command, which removes avoidable per-request overhead in high-rate operation.
+- Prefer batched reads with `get_parameters(...)` instead of multiple `get_parameter(...)` calls per sample.
+- Reduce the number of parameters logged per sample during fast waveform tests; each parameter adds another protocol response to parse.
+- If your hardware supports it, use TCP transport to avoid USB-serial overhead.
+
+These changes reduce host-side overhead; the absolute maximum sample rate is still bounded by controller processing time and link speed.
+
 ### TEC1161 calibration workflow
 
 The repository now includes a long-running stepped calibration runner in `mecom/calibration.py`.

@@ -1038,9 +1038,6 @@ class MeComSerial(MeComCommon):
         self.lock.acquire()
 
         try:
-            self.ser.reset_output_buffer()
-            self.ser.reset_input_buffer()
-
             frames = []
             for query in queries:
                 query.set_sequence(self.SEQUENCE_COUNTER)
@@ -1072,10 +1069,6 @@ class MeComSerial(MeComCommon):
         self.lock.acquire()
 
         try:
-            # clear buffers
-            self.ser.reset_output_buffer()
-            self.ser.reset_input_buffer()
-
             query.set_sequence(self.SEQUENCE_COUNTER)
             # send query
             self.ser.write(query.compose())
