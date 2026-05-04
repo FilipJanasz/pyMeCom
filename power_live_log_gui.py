@@ -109,6 +109,7 @@ class LiveLoggerGui:
         self.columns_list = Listbox(left_col, selectmode='extended', yscrollcommand=scroller.set, height=8, width=24, exportselection=False)
         scroller.config(command=self.columns_list.yview)
         self.columns_list.pack(side=LEFT, fill='y')
+        self.columns_list.bind('<Double-Button-1>', self._apply_double_clicked_column)
         scroller.pack(side=RIGHT, fill='y')
 
         right_col = Frame(mid)
@@ -116,25 +117,32 @@ class LiveLoggerGui:
         Label(right_col, text='Live plots').pack(anchor='w')
         self.plot_frame = Frame(right_col)
         self.plot_frame.pack(fill=BOTH, expand=True)
+        self.request_plot_frame = Frame(io_frame)
+        self.request_plot_frame.grid(row=6, column=0, columnspan=5, sticky='nsew', pady=(8, 0))
         self.canvas = None
         self.figure = None
         self.axis = None
         self.request_axis = None
+        self.request_canvas = None
+        self.request_figure = None
         if Figure is not None:
             self.figure = Figure(figsize=(9, 5), dpi=100)
-            grid = self.figure.add_gridspec(2, 1, height_ratios=[4, 1], hspace=0.5)
-            self.axis = self.figure.add_subplot(grid[0])
-            self.request_axis = self.figure.add_subplot(grid[1])
+            self.axis = self.figure.add_subplot(111)
             self.canvas = FigureCanvasTkAgg(self.figure, master=self.plot_frame)
             self.canvas.get_tk_widget().pack(fill=BOTH, expand=True)
             self.axis.set_title('Live plot (select columns then start)')
             self.axis.set_xlabel('Timestamp (UTC)')
             self.axis.grid(True, which='major', linestyle='--', alpha=0.6)
+            self.request_figure = Figure(figsize=(5.5, 1.8), dpi=100)
+            self.request_axis = self.request_figure.add_subplot(111)
+            self.request_canvas = FigureCanvasTkAgg(self.request_figure, master=self.request_plot_frame)
+            self.request_canvas.get_tk_widget().pack(fill=BOTH, expand=True)
             self.request_axis.set_title('Requested input from loaded JSON')
             self.request_axis.set_xlabel('Seconds')
             self.request_axis.set_ylabel('Set voltage')
             self.request_axis.grid(True, which='major', linestyle='--', alpha=0.6)
             self.canvas.draw_idle()
+            self.request_canvas.draw_idle()
         Checkbutton(io_frame, text='Show requested input line', variable=self.show_requested_line, command=self._redraw_requested_input_plot).grid(row=5, column=0, columnspan=2, sticky='w')
 
     def browse_config(self) -> None:
@@ -225,6 +233,18 @@ class LiveLoggerGui:
             return
         self._redraw_plot()
 
+    def _apply_double_clicked_column(self, event) -> None:
+        idx = self.columns_list.nearest(event.y)
+        if idx < 0:
+            return
+        self.columns_list.selection_clear(0, END)
+        self.columns_list.selection_set(idx)
+        requested_cols = [self.columns_list.get(idx)]
+        self.selected_cols = requested_cols
+        for col in self.selected_cols:
+            self.live_data.setdefault(col, deque(maxlen=MAX_POINTS))
+        self._redraw_plot()
+
     def start_logging(self) -> None:
         if Figure is None:
             messagebox.showwarning('Missing matplotlib', 'Install matplotlib for required live plotting support.')
@@ -240,9 +260,8 @@ class LiveLoggerGui:
             self.columns_list.insert(END, spec.label)
 
         if not self.selected_cols:
-            default_col = next((spec.label for spec in cfg.parameters if spec.label == 'act U'), cfg.parameters[0].label)
+            default_col = next((spec.label for spec in cfg.parameters if 'act u' in spec.label.lower()), cfg.parameters[0].label)
             self.selected_cols = [default_col]
-            self.live_data = {self.selected_cols[0]: deque(maxlen=MAX_POINTS)}
         for idx, spec in enumerate(cfg.parameters):
             if spec.label in self.selected_cols:
                 self.columns_list.selection_set(idx)
@@ -267,6 +286,14 @@ class LiveLoggerGui:
                     val = float(row.get(col, 'nan'))
                 except Exception:
                     val = float('nan')
+                self.live_data.setdefault(col, deque(maxlen=MAX_POINTS)).append(val)
+            for col, raw_val in row.items():
+                if col == 'OLE Automation Date' or col in self.selected_cols:
+                    continue
+                try:
+                    val = float(raw_val)
+                except Exception:
+                    continue
                 self.live_data.setdefault(col, deque(maxlen=MAX_POINTS)).append(val)
 
         def worker() -> None:
@@ -314,7 +341,7 @@ class LiveLoggerGui:
         self.canvas.draw_idle()
 
     def _redraw_requested_input_plot(self) -> None:
-        if self.request_axis is None or self.canvas is None:
+        if self.request_axis is None or self.request_canvas is None:
             return
         self.request_axis.clear()
         if self.loaded_schedule_points:
@@ -330,7 +357,7 @@ class LiveLoggerGui:
         self.request_axis.set_xlabel('Seconds')
         self.request_axis.set_ylabel('Set voltage')
         self.request_axis.grid(True, which='major', linestyle='--', alpha=0.6)
-        self.canvas.draw_idle()
+        self.request_canvas.draw_idle()
 
     def force_stop(self) -> None:
         self.stop_requested = True
