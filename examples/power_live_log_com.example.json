@@ -14,12 +14,6 @@
   "allow_named_voltage_current_fallback": true,
   "parameters": [
     {
-      "key": "error_number",
-      "label": "105.1: Error Number",
-      "parameter_name": "Error Number",
-      "instance": 1
-    },
-    {
       "key": "ch1_act_i",
       "label": "1020.1: CH1 Act I",
       "parameter_id": 1020,
@@ -45,13 +39,6 @@
       "parameter_id": 1044,
       "parameter_format": "FLOAT32",
       "instance": 1
-    },
-    {
-      "key": "lr2_temp",
-      "label": "1044.2: LR2 Temp",
-      "parameter_id": 1044,
-      "parameter_format": "FLOAT32",
-      "instance": 2
     },
     {
       "key": "diff_voltage_1",
