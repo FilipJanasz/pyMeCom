@@ -118,6 +118,7 @@ class LiveLoggerConfig:
     tcp_port: int = 50000
     output_directory: str = "live_logs"
     output_prefix: str = "power_live_log_com"
+    run_name: Optional[str] = None
     write_metadata_sidecar: bool = True
     parameters: List[LiveParameterSpec] = field(default_factory=list)
     power_schedule: List[PowerScheduleStep] = field(default_factory=list)
@@ -129,7 +130,9 @@ class LiveLoggerConfig:
         payload = dict(data)
         payload["parameters"] = [LiveParameterSpec.from_dict(item) for item in payload.get("parameters", [])]
         payload["power_schedule"] = [PowerScheduleStep.from_dict(item) for item in payload.get("power_schedule", [])]
-        return cls(**payload)
+        valid_keys = set(cls.__dataclass_fields__.keys())
+        filtered_payload = {key: value for key, value in payload.items() if key in valid_keys}
+        return cls(**filtered_payload)
 
     @classmethod
     def from_json_file(cls, path: str | Path) -> "LiveLoggerConfig":
@@ -185,7 +188,8 @@ class LiveLogger:
         out_dir = Path(self.config.output_directory)
         out_dir.mkdir(parents=True, exist_ok=True)
         started_at = datetime.now(timezone.utc)
-        stem = f"{self.config.output_prefix}_{started_at.strftime('%Y%m%d_%H%M%S')}"
+        suffix = self.config.run_name or started_at.strftime('%Y%m%d_%H%M%S')
+        stem = f"{self.config.output_prefix}_{suffix}"
         csv_path = out_dir / f"{stem}.csv"
 
         if started_callback is not None:
