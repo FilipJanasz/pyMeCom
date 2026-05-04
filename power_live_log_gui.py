@@ -167,6 +167,7 @@ class LiveLoggerGui:
 
     def _load_requested_input_from_config(self, path_text: str) -> None:
         self.loaded_schedule_points = []
+        total_duration = 0.0
         try:
             content = json.loads(Path(path_text).read_text(encoding='utf-8'))
             schedule = content.get('power_schedule', [])
@@ -177,8 +178,12 @@ class LiveLoggerGui:
                 self.loaded_schedule_points.append((t, set_voltage))
                 t += duration
                 self.loaded_schedule_points.append((t, set_voltage))
+            total_duration = t
         except Exception:
             self.loaded_schedule_points = []
+            total_duration = 0.0
+        if total_duration > 0.0:
+            self.duration.set(f'{total_duration:g}')
         self._redraw_requested_input_plot()
 
     def save_config(self) -> None:
@@ -227,6 +232,9 @@ class LiveLoggerGui:
         if not self.selected_cols:
             self.selected_cols = [cfg.parameters[0].label]
             self.live_data = {self.selected_cols[0]: deque(maxlen=MAX_POINTS)}
+        self.sample_index = deque(maxlen=MAX_POINTS)
+        for col in self.selected_cols:
+            self.live_data[col] = deque(maxlen=MAX_POINTS)
 
         self.animating = True
         self._schedule_plot_refresh()
@@ -277,11 +285,14 @@ class LiveLoggerGui:
         self.axis.clear()
         if self.selected_cols:
             x = list(self.sample_index)
+            plotted_lines = 0
             for col in self.selected_cols:
                 y = list(self.live_data.get(col, []))
                 if x and y:
                     self.axis.plot([datetime.fromtimestamp(v, tz=timezone.utc) for v in x[-len(y):]], y, label=col)
-            self.axis.legend(loc='best')
+                    plotted_lines += 1
+            if plotted_lines:
+                self.axis.legend(loc='best')
         self.axis.set_title('Live plot')
         self.axis.set_xlabel('Timestamp (UTC)')
         if mdates is not None:
