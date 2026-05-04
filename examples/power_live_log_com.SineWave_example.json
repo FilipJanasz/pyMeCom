@@ -55,8 +55,8 @@
       "instance": 2
     }
   ],
-  "duration_seconds": 10,
-  "output_prefix": "tec1161_sine_10s_high_res",
+  "duration_seconds": 5,
+  "output_prefix": "tec1161_sine_0p5hz_5s_high_res",
   "power_schedule": [
     {
       "name": "s000",
@@ -69,7 +69,7 @@
     {
       "name": "s001",
       "power": 0.0,
-      "set_voltage": 2.618034,
+      "set_voltage": 2.312869,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -77,7 +77,7 @@
     {
       "name": "s002",
       "power": 0.0,
-      "set_voltage": 3.175571,
+      "set_voltage": 2.618034,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -85,7 +85,7 @@
     {
       "name": "s003",
       "power": 0.0,
-      "set_voltage": 3.618034,
+      "set_voltage": 2.907981,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -93,7 +93,7 @@
     {
       "name": "s004",
       "power": 0.0,
-      "set_voltage": 3.902113,
+      "set_voltage": 3.175571,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -101,7 +101,7 @@
     {
       "name": "s005",
       "power": 0.0,
-      "set_voltage": 4.0,
+      "set_voltage": 3.414214,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -109,7 +109,7 @@
     {
       "name": "s006",
       "power": 0.0,
-      "set_voltage": 3.902113,
+      "set_voltage": 3.618034,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -117,7 +117,7 @@
     {
       "name": "s007",
       "power": 0.0,
-      "set_voltage": 3.618034,
+      "set_voltage": 3.782013,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -125,7 +125,7 @@
     {
       "name": "s008",
       "power": 0.0,
-      "set_voltage": 3.175571,
+      "set_voltage": 3.902113,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -133,7 +133,7 @@
     {
       "name": "s009",
       "power": 0.0,
-      "set_voltage": 2.618034,
+      "set_voltage": 3.975377,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -141,7 +141,7 @@
     {
       "name": "s010",
       "power": 0.0,
-      "set_voltage": 2.0,
+      "set_voltage": 4.0,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -149,7 +149,7 @@
     {
       "name": "s011",
       "power": 0.0,
-      "set_voltage": 1.381966,
+      "set_voltage": 3.975377,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -157,7 +157,7 @@
     {
       "name": "s012",
       "power": 0.0,
-      "set_voltage": 0.824429,
+      "set_voltage": 3.902113,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -165,7 +165,7 @@
     {
       "name": "s013",
       "power": 0.0,
-      "set_voltage": 0.381966,
+      "set_voltage": 3.782013,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -173,7 +173,7 @@
     {
       "name": "s014",
       "power": 0.0,
-      "set_voltage": 0.097887,
+      "set_voltage": 3.618034,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -181,7 +181,7 @@
     {
       "name": "s015",
       "power": 0.0,
-      "set_voltage": 0.0,
+      "set_voltage": 3.414214,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -189,7 +189,7 @@
     {
       "name": "s016",
       "power": 0.0,
-      "set_voltage": 0.097887,
+      "set_voltage": 3.175571,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -197,7 +197,7 @@
     {
       "name": "s017",
       "power": 0.0,
-      "set_voltage": 0.381966,
+      "set_voltage": 2.907981,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -205,7 +205,7 @@
     {
       "name": "s018",
       "power": 0.0,
-      "set_voltage": 0.824429,
+      "set_voltage": 2.618034,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -213,7 +213,7 @@
     {
       "name": "s019",
       "power": 0.0,
-      "set_voltage": 1.381966,
+      "set_voltage": 2.312869,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -229,7 +229,7 @@
     {
       "name": "s021",
       "power": 0.0,
-      "set_voltage": 2.618034,
+      "set_voltage": 1.687131,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -237,7 +237,7 @@
     {
       "name": "s022",
       "power": 0.0,
-      "set_voltage": 3.175571,
+      "set_voltage": 1.381966,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -245,7 +245,7 @@
     {
       "name": "s023",
       "power": 0.0,
-      "set_voltage": 3.618034,
+      "set_voltage": 1.092019,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -253,7 +253,7 @@
     {
       "name": "s024",
       "power": 0.0,
-      "set_voltage": 3.902113,
+      "set_voltage": 0.824429,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -261,7 +261,7 @@
     {
       "name": "s025",
       "power": 0.0,
-      "set_voltage": 4.0,
+      "set_voltage": 0.585786,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -269,7 +269,7 @@
     {
       "name": "s026",
       "power": 0.0,
-      "set_voltage": 3.902113,
+      "set_voltage": 0.381966,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -277,7 +277,7 @@
     {
       "name": "s027",
       "power": 0.0,
-      "set_voltage": 3.618034,
+      "set_voltage": 0.217987,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -285,7 +285,7 @@
     {
       "name": "s028",
       "power": 0.0,
-      "set_voltage": 3.175571,
+      "set_voltage": 0.097887,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -293,7 +293,7 @@
     {
       "name": "s029",
       "power": 0.0,
-      "set_voltage": 2.618034,
+      "set_voltage": 0.024623,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -301,7 +301,7 @@
     {
       "name": "s030",
       "power": 0.0,
-      "set_voltage": 2.0,
+      "set_voltage": 0.0,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -309,7 +309,7 @@
     {
       "name": "s031",
       "power": 0.0,
-      "set_voltage": 1.381966,
+      "set_voltage": 0.024623,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -317,7 +317,7 @@
     {
       "name": "s032",
       "power": 0.0,
-      "set_voltage": 0.824429,
+      "set_voltage": 0.097887,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -325,7 +325,7 @@
     {
       "name": "s033",
       "power": 0.0,
-      "set_voltage": 0.381966,
+      "set_voltage": 0.217987,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -333,7 +333,7 @@
     {
       "name": "s034",
       "power": 0.0,
-      "set_voltage": 0.097887,
+      "set_voltage": 0.381966,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -341,7 +341,7 @@
     {
       "name": "s035",
       "power": 0.0,
-      "set_voltage": 0.0,
+      "set_voltage": 0.585786,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -349,7 +349,7 @@
     {
       "name": "s036",
       "power": 0.0,
-      "set_voltage": 0.097887,
+      "set_voltage": 0.824429,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -357,7 +357,7 @@
     {
       "name": "s037",
       "power": 0.0,
-      "set_voltage": 0.381966,
+      "set_voltage": 1.092019,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -365,7 +365,7 @@
     {
       "name": "s038",
       "power": 0.0,
-      "set_voltage": 0.824429,
+      "set_voltage": 1.381966,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -373,7 +373,7 @@
     {
       "name": "s039",
       "power": 0.0,
-      "set_voltage": 1.381966,
+      "set_voltage": 1.687131,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -389,7 +389,7 @@
     {
       "name": "s041",
       "power": 0.0,
-      "set_voltage": 2.618034,
+      "set_voltage": 2.312869,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -397,7 +397,7 @@
     {
       "name": "s042",
       "power": 0.0,
-      "set_voltage": 3.175571,
+      "set_voltage": 2.618034,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -405,7 +405,7 @@
     {
       "name": "s043",
       "power": 0.0,
-      "set_voltage": 3.618034,
+      "set_voltage": 2.907981,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -413,7 +413,7 @@
     {
       "name": "s044",
       "power": 0.0,
-      "set_voltage": 3.902113,
+      "set_voltage": 3.175571,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -421,7 +421,7 @@
     {
       "name": "s045",
       "power": 0.0,
-      "set_voltage": 4.0,
+      "set_voltage": 3.414214,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -429,7 +429,7 @@
     {
       "name": "s046",
       "power": 0.0,
-      "set_voltage": 3.902113,
+      "set_voltage": 3.618034,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -437,7 +437,7 @@
     {
       "name": "s047",
       "power": 0.0,
-      "set_voltage": 3.618034,
+      "set_voltage": 3.782013,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -445,7 +445,7 @@
     {
       "name": "s048",
       "power": 0.0,
-      "set_voltage": 3.175571,
+      "set_voltage": 3.902113,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -453,7 +453,7 @@
     {
       "name": "s049",
       "power": 0.0,
-      "set_voltage": 2.618034,
+      "set_voltage": 3.975377,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -461,7 +461,7 @@
     {
       "name": "s050",
       "power": 0.0,
-      "set_voltage": 2.0,
+      "set_voltage": 4.0,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -469,7 +469,7 @@
     {
       "name": "s051",
       "power": 0.0,
-      "set_voltage": 1.381966,
+      "set_voltage": 3.975377,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -477,7 +477,7 @@
     {
       "name": "s052",
       "power": 0.0,
-      "set_voltage": 0.824429,
+      "set_voltage": 3.902113,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -485,7 +485,7 @@
     {
       "name": "s053",
       "power": 0.0,
-      "set_voltage": 0.381966,
+      "set_voltage": 3.782013,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -493,7 +493,7 @@
     {
       "name": "s054",
       "power": 0.0,
-      "set_voltage": 0.097887,
+      "set_voltage": 3.618034,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -501,7 +501,7 @@
     {
       "name": "s055",
       "power": 0.0,
-      "set_voltage": 0.0,
+      "set_voltage": 3.414214,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -509,7 +509,7 @@
     {
       "name": "s056",
       "power": 0.0,
-      "set_voltage": 0.097887,
+      "set_voltage": 3.175571,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -517,7 +517,7 @@
     {
       "name": "s057",
       "power": 0.0,
-      "set_voltage": 0.381966,
+      "set_voltage": 2.907981,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -525,7 +525,7 @@
     {
       "name": "s058",
       "power": 0.0,
-      "set_voltage": 0.824429,
+      "set_voltage": 2.618034,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -533,7 +533,7 @@
     {
       "name": "s059",
       "power": 0.0,
-      "set_voltage": 1.381966,
+      "set_voltage": 2.312869,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -549,7 +549,7 @@
     {
       "name": "s061",
       "power": 0.0,
-      "set_voltage": 2.618034,
+      "set_voltage": 1.687131,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -557,7 +557,7 @@
     {
       "name": "s062",
       "power": 0.0,
-      "set_voltage": 3.175571,
+      "set_voltage": 1.381966,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -565,7 +565,7 @@
     {
       "name": "s063",
       "power": 0.0,
-      "set_voltage": 3.618034,
+      "set_voltage": 1.092019,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -573,7 +573,7 @@
     {
       "name": "s064",
       "power": 0.0,
-      "set_voltage": 3.902113,
+      "set_voltage": 0.824429,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -581,7 +581,7 @@
     {
       "name": "s065",
       "power": 0.0,
-      "set_voltage": 4.0,
+      "set_voltage": 0.585786,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -589,7 +589,7 @@
     {
       "name": "s066",
       "power": 0.0,
-      "set_voltage": 3.902113,
+      "set_voltage": 0.381966,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -597,7 +597,7 @@
     {
       "name": "s067",
       "power": 0.0,
-      "set_voltage": 3.618034,
+      "set_voltage": 0.217987,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -605,7 +605,7 @@
     {
       "name": "s068",
       "power": 0.0,
-      "set_voltage": 3.175571,
+      "set_voltage": 0.097887,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -613,7 +613,7 @@
     {
       "name": "s069",
       "power": 0.0,
-      "set_voltage": 2.618034,
+      "set_voltage": 0.024623,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -621,7 +621,7 @@
     {
       "name": "s070",
       "power": 0.0,
-      "set_voltage": 2.0,
+      "set_voltage": 0.0,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -629,7 +629,7 @@
     {
       "name": "s071",
       "power": 0.0,
-      "set_voltage": 1.381966,
+      "set_voltage": 0.024623,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -637,7 +637,7 @@
     {
       "name": "s072",
       "power": 0.0,
-      "set_voltage": 0.824429,
+      "set_voltage": 0.097887,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -645,7 +645,7 @@
     {
       "name": "s073",
       "power": 0.0,
-      "set_voltage": 0.381966,
+      "set_voltage": 0.217987,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -653,7 +653,7 @@
     {
       "name": "s074",
       "power": 0.0,
-      "set_voltage": 0.097887,
+      "set_voltage": 0.381966,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -661,7 +661,7 @@
     {
       "name": "s075",
       "power": 0.0,
-      "set_voltage": 0.0,
+      "set_voltage": 0.585786,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -669,7 +669,7 @@
     {
       "name": "s076",
       "power": 0.0,
-      "set_voltage": 0.097887,
+      "set_voltage": 0.824429,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -677,7 +677,7 @@
     {
       "name": "s077",
       "power": 0.0,
-      "set_voltage": 0.381966,
+      "set_voltage": 1.092019,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -685,7 +685,7 @@
     {
       "name": "s078",
       "power": 0.0,
-      "set_voltage": 0.824429,
+      "set_voltage": 1.381966,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -693,7 +693,7 @@
     {
       "name": "s079",
       "power": 0.0,
-      "set_voltage": 1.381966,
+      "set_voltage": 1.687131,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -709,7 +709,7 @@
     {
       "name": "s081",
       "power": 0.0,
-      "set_voltage": 2.618034,
+      "set_voltage": 2.312869,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -717,7 +717,7 @@
     {
       "name": "s082",
       "power": 0.0,
-      "set_voltage": 3.175571,
+      "set_voltage": 2.618034,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -725,7 +725,7 @@
     {
       "name": "s083",
       "power": 0.0,
-      "set_voltage": 3.618034,
+      "set_voltage": 2.907981,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -733,7 +733,7 @@
     {
       "name": "s084",
       "power": 0.0,
-      "set_voltage": 3.902113,
+      "set_voltage": 3.175571,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -741,7 +741,7 @@
     {
       "name": "s085",
       "power": 0.0,
-      "set_voltage": 4.0,
+      "set_voltage": 3.414214,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -749,7 +749,7 @@
     {
       "name": "s086",
       "power": 0.0,
-      "set_voltage": 3.902113,
+      "set_voltage": 3.618034,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -757,7 +757,7 @@
     {
       "name": "s087",
       "power": 0.0,
-      "set_voltage": 3.618034,
+      "set_voltage": 3.782013,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -765,7 +765,7 @@
     {
       "name": "s088",
       "power": 0.0,
-      "set_voltage": 3.175571,
+      "set_voltage": 3.902113,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -773,7 +773,7 @@
     {
       "name": "s089",
       "power": 0.0,
-      "set_voltage": 2.618034,
+      "set_voltage": 3.975377,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -781,7 +781,7 @@
     {
       "name": "s090",
       "power": 0.0,
-      "set_voltage": 2.0,
+      "set_voltage": 4.0,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -789,7 +789,7 @@
     {
       "name": "s091",
       "power": 0.0,
-      "set_voltage": 1.381966,
+      "set_voltage": 3.975377,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -797,7 +797,7 @@
     {
       "name": "s092",
       "power": 0.0,
-      "set_voltage": 0.824429,
+      "set_voltage": 3.902113,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -805,7 +805,7 @@
     {
       "name": "s093",
       "power": 0.0,
-      "set_voltage": 0.381966,
+      "set_voltage": 3.782013,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -813,7 +813,7 @@
     {
       "name": "s094",
       "power": 0.0,
-      "set_voltage": 0.097887,
+      "set_voltage": 3.618034,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -821,7 +821,7 @@
     {
       "name": "s095",
       "power": 0.0,
-      "set_voltage": 0.0,
+      "set_voltage": 3.414214,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -829,7 +829,7 @@
     {
       "name": "s096",
       "power": 0.0,
-      "set_voltage": 0.097887,
+      "set_voltage": 3.175571,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -837,7 +837,7 @@
     {
       "name": "s097",
       "power": 0.0,
-      "set_voltage": 0.381966,
+      "set_voltage": 2.907981,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -845,7 +845,7 @@
     {
       "name": "s098",
       "power": 0.0,
-      "set_voltage": 0.824429,
+      "set_voltage": 2.618034,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
@@ -853,7 +853,7 @@
     {
       "name": "s099",
       "power": 0.0,
-      "set_voltage": 1.381966,
+      "set_voltage": 2.312869,
       "set_current": 0.5,
       "duration_seconds": 0.05,
       "enable_output": true
