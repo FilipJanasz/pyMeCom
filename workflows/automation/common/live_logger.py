@@ -116,6 +116,7 @@ class LiveLoggerConfig:
     power_schedule: List[PowerScheduleStep] = field(default_factory=list)
     allow_named_voltage_current_fallback: bool = False
     duration_seconds: Optional[float] = None
+    csv_flush_every_rows: int = 1
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "LiveLoggerConfig":
@@ -201,6 +202,8 @@ class LiveLogger:
             writer = csv.DictWriter(handle, fieldnames=fields)
             writer.writeheader()
             handle.flush()
+            rows_since_flush = 0
+            flush_every_rows = max(1, int(self.config.csv_flush_every_rows))
 
             channel_config = type(
                 "LiveChannelConfig",
@@ -242,7 +245,10 @@ class LiveLogger:
                 for spec in self.config.parameters:
                     row[spec.label] = self._read_parameter(session, spec)
                 writer.writerow(row)
-                handle.flush()
+                rows_since_flush += 1
+                if rows_since_flush >= flush_every_rows:
+                    handle.flush()
+                    rows_since_flush = 0
                 if row_callback is not None:
                     row_callback(row)
 
@@ -271,6 +277,8 @@ class LiveLogger:
                 sleep_for = interval - (time.monotonic() - tick)
                 if sleep_for > 0:
                     time.sleep(sleep_for)
+            if rows_since_flush > 0:
+                handle.flush()
         return csv_path
 
     def _read_parameter(self, session: MeComSerial, spec: LiveParameterSpec) -> Any:
