@@ -8,7 +8,7 @@ from dataclasses import asdict
 from pathlib import Path
 from tkinter import BOTH, END, LEFT, RIGHT, VERTICAL, Button, Checkbutton, Entry, Frame, IntVar, Label, Listbox, Scrollbar, StringVar, Tk, filedialog, messagebox
 
-from workflows.automation.common.live_logger import LiveLogger, LiveLoggerConfig, default_live_parameters
+from workflows.automation.common.live_logger import LiveLogger, LiveLoggerConfig, PowerScheduleStep, default_live_parameters
 
 try:
     import matplotlib.dates as mdates
@@ -155,6 +155,10 @@ class LiveLoggerGui:
 
     def _build_config(self) -> LiveLoggerConfig:
         duration = float(self.duration.get()) if self.duration.get().strip() else None
+        normalized_schedule = [
+            step if isinstance(step, PowerScheduleStep) else PowerScheduleStep.from_dict(step)
+            for step in self.loaded_power_schedule
+        ]
         return LiveLoggerConfig(
             transport='com',
             serial_port=self.serial_port.get().strip() or None,
@@ -165,7 +169,7 @@ class LiveLoggerGui:
             output_directory=self.output_directory.get().strip() or 'live_logs',
             output_prefix=self.output_prefix.get().strip() or 'power_live_log_com',
             parameters=default_live_parameters(channel=int(self.channel.get())),
-            power_schedule=list(self.loaded_power_schedule),
+            power_schedule=normalized_schedule,
             allow_named_voltage_current_fallback=True,
             duration_seconds=duration,
         )
