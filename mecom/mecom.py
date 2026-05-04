@@ -84,6 +84,8 @@ class ParameterList(object):
                 self._PARAMETERS.append(Parameter(parameter))
         else:
             raise UnknownMeComType
+        self._PARAMETERS_BY_ID = {parameter.id: parameter for parameter in self._PARAMETERS}
+        self._PARAMETERS_BY_NAME = {parameter.name: parameter for parameter in self._PARAMETERS}
 
     def get_by_id(self, id):
         """
@@ -91,9 +93,9 @@ class ParameterList(object):
         :param id: int
         :return: Parameter()
         """
-        for parameter in self._PARAMETERS:
-            if parameter.id == id:
-                return parameter
+        parameter = self._PARAMETERS_BY_ID.get(id)
+        if parameter is not None:
+            return parameter
         raise UnknownParameter
 
     def get_by_name(self, name):
@@ -102,9 +104,9 @@ class ParameterList(object):
         :param name: str
         :return: Parameter()
         """
-        for parameter in self._PARAMETERS:
-            if parameter.name == name:
-                return parameter
+        parameter = self._PARAMETERS_BY_NAME.get(name)
+        if parameter is not None:
+            return parameter
         raise UnknownParameter
 
 
@@ -115,6 +117,7 @@ class MeFrame(object):
     _TYPES = {"UINT8": "!H", "UINT16": "!L", "INT32": "!i", "FLOAT32": "!f"}
     _SOURCE = ""
     _EOL = "\r"  # carriage return
+    _EOL_BYTES = b"\r"
 
     def __init__(self):
         self.ADDRESS = 0
@@ -750,6 +753,36 @@ class MeComCommon:
         return info.RESPONSE.PAYLOAD
 
 
+    def _execute_batch(self, queries):
+        """Execute multiple query objects in as few transport transactions as possible."""
+        return [self._execute(query) for query in queries]
+
+    def get_parameters(self, parameter_names=None, parameter_ids=None, *args, **kwargs):
+        """
+        Get multiple parameter values in a batched transaction if supported by the transport.
+        :param parameter_names: iterable[str]
+        :param parameter_ids: iterable[int]
+        :return: dict mapping provided parameter identifier to value
+        """
+        names = list(parameter_names or [])
+        ids = list(parameter_ids or [])
+        if not names and not ids:
+            raise ValueError("parameter_names or parameter_ids must be provided")
+
+        queries = []
+        keys = []
+        for parameter_name in names:
+            parameter = self._find_parameter(parameter_name=parameter_name, parameter_id=None)
+            queries.append(VR(parameter=parameter, *args, **kwargs))
+            keys.append(parameter_name)
+        for parameter_id in ids:
+            parameter = self._find_parameter(parameter_name=None, parameter_id=parameter_id)
+            queries.append(VR(parameter=parameter, *args, **kwargs))
+            keys.append(parameter_id)
+
+        responses = self._execute_batch(queries)
+        return {key: query.RESPONSE.PAYLOAD[0] for key, query in zip(keys, responses)}
+
     # returns device address
     identify = partialmethod(get_parameter, parameter_name="Device Address")
     """
@@ -851,6 +884,7 @@ class MeComTcp(MeComCommon):
         self.tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.tcp.settimeout(timeout)
         self.tcp.connect((ipaddress, ipport))
+        self._tcp_read_buffer = b""
 
         # if configured, discard any data received right after connecting
         if discardwait is not None:
@@ -885,6 +919,45 @@ class MeComTcp(MeComCommon):
         else:
             return recv
 
+    def _read_frame(self):
+        """
+        Read one protocol frame payload (without trailing carriage return).
+        """
+        while MeFrame._EOL_BYTES not in self._tcp_read_buffer:
+            chunk = self.tcp.recv(1024)
+            if not chunk:
+                raise ResponseTimeout("timeout while communication via network")
+            self._tcp_read_buffer += chunk
+        frame, self._tcp_read_buffer = self._tcp_read_buffer.split(MeFrame._EOL_BYTES, 1)
+        return frame
+
+    def _execute_batch(self, queries):
+        self.lock.acquire()
+
+        try:
+            frames = []
+            for query in queries:
+                query.set_sequence(self.SEQUENCE_COUNTER)
+                frames.append(query.compose())
+                self._inc()
+
+            if frames:
+                self.tcp.sendall(b"".join(frames))
+
+            for query in queries:
+                if query.ADDRESS != 255:
+                    response_frame = self._read_frame()
+                    response_frame = response_frame[1:]
+                    query.set_response(response_frame)
+                else:
+                    query.RESPONSE = EmptyResponse()
+
+                self._raise(query)
+        finally:
+            self.lock.release()
+
+        return queries
+
     def _execute(self, query):
         self.lock.acquire()
 
@@ -895,15 +968,7 @@ class MeComTcp(MeComCommon):
             # print(query.compose())
 
             if query.ADDRESS != 255:
-                # initialize response and carriage return
-                cr = "\r".encode()
-                response_frame = b''
-                response_byte = self._read(size=1)  # read one byte at a time, timeout is set on instance level
-
-                # read until stop byte
-                while response_byte != cr:
-                    response_frame += response_byte
-                    response_byte = self._read(size=1)
+                response_frame = self._read_frame()
         finally:
             # increment sequence counter
             self._inc()
@@ -969,6 +1034,40 @@ class MeComSerial(MeComCommon):
         else:
             return recv
 
+    def _execute_batch(self, queries):
+        self.lock.acquire()
+
+        try:
+            self.ser.reset_output_buffer()
+            self.ser.reset_input_buffer()
+
+            frames = []
+            for query in queries:
+                query.set_sequence(self.SEQUENCE_COUNTER)
+                frames.append(query.compose())
+                self._inc()
+
+            if frames:
+                self.ser.write(b"".join(frames))
+                self.ser.flush()
+
+            for query in queries:
+                if query.ADDRESS != 255:
+                    response_frame = self.ser.read_until(expected=MeFrame._EOL_BYTES)
+                    if not response_frame or response_frame[-1:] != MeFrame._EOL_BYTES:
+                        raise ResponseTimeout("timeout while communication via serial")
+                    response_frame = response_frame[:-1]
+                    response_frame = response_frame[1:]
+                    query.set_response(response_frame)
+                else:
+                    query.RESPONSE = EmptyResponse()
+
+                self._raise(query)
+        finally:
+            self.lock.release()
+
+        return queries
+
     def _execute(self, query):
         self.lock.acquire()
 
@@ -986,15 +1085,10 @@ class MeComSerial(MeComCommon):
             self.ser.flush()
 
             if query.ADDRESS != 255:
-                # initialize response and carriage return
-                cr = "\r".encode()
-                response_frame = b''
-                response_byte = self._read(size=1)  # read one byte at a time, timeout is set on instance level
-
-                # read until stop byte
-                while response_byte != cr:
-                    response_frame += response_byte
-                    response_byte = self._read(size=1)
+                response_frame = self.ser.read_until(expected=MeFrame._EOL_BYTES)
+                if not response_frame or response_frame[-1:] != MeFrame._EOL_BYTES:
+                    raise ResponseTimeout("timeout while communication via serial")
+                response_frame = response_frame[:-1]
         finally:
             # increment sequence counter
             self._inc()
@@ -1098,4 +1192,3 @@ if __name__ == "__main__":
             # mc.reset_device()
 
             print("leaving with-statement, connection will be closed")
-
