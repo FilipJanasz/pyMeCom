@@ -8,7 +8,7 @@ serial_stub.Serial = object
 serial_stub.serialutil = types.SimpleNamespace(SerialException=Exception)
 sys.modules.setdefault('serial', serial_stub)
 
-from workflows.automation.common.live_logger import build_time_columns, default_live_parameters, ole_automation_date
+from workflows.automation.common.live_logger import LiveLoggerConfig, build_time_columns, default_live_parameters, ole_automation_date
 
 
 class LiveLoggerFormattingTests(unittest.TestCase):
@@ -27,6 +27,11 @@ class LiveLoggerFormattingTests(unittest.TestCase):
         labels = [spec.label for spec in default_live_parameters(channel=1)]
         self.assertNotIn('105.1: Error Number', labels)
         self.assertNotIn('1044.2: LR2 Temp', labels)
+
+    def test_live_logger_config_defaults_and_parses_csv_flush_rows(self):
+        self.assertEqual(LiveLoggerConfig().csv_flush_every_rows, 1)
+        config = LiveLoggerConfig.from_dict({"csv_flush_every_rows": 25})
+        self.assertEqual(config.csv_flush_every_rows, 25)
 
 
 if __name__ == '__main__':
