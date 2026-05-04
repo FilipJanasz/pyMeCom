@@ -23,10 +23,10 @@ class LiveLoggerFormattingTests(unittest.TestCase):
         self.assertEqual(row['Milliseconds'], 789)
         self.assertAlmostEqual(row['OLE Automation Date'], ole_automation_date(dt))
 
-    def test_default_parameters_include_hr_temp_differential_inputs(self):
+    def test_default_parameters_omit_error_number_and_lr2_temp(self):
         labels = [spec.label for spec in default_live_parameters(channel=1)]
-        self.assertIn('1048.1: HR Temp Differential Input', labels)
-        self.assertIn('1048.2: HR Temp Differential Input', labels)
+        self.assertNotIn('105.1: Error Number', labels)
+        self.assertNotIn('1044.2: LR2 Temp', labels)
 
 
 if __name__ == '__main__':
