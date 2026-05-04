@@ -39,6 +39,7 @@ class LiveLoggerGui:
         self.output_directory = StringVar(value='live_logs')
         self.output_prefix = StringVar(value='power_live_log_com')
         self.show_requested_line = IntVar(value=1)
+        self.show_live_line = IntVar(value=1)
 
         self.last_output_csv: Path | None = None
         self.run_thread: threading.Thread | None = None
@@ -46,6 +47,7 @@ class LiveLoggerGui:
         self.sample_index = deque(maxlen=MAX_POINTS)
         self.selected_cols: list[str] = []
         self.loaded_schedule_points: list[tuple[float, float]] = []
+        self.loaded_power_schedule = []
         self.animating = False
         self.stop_requested = False
         self.status_text = StringVar(value='Controller status: unknown')
@@ -144,6 +146,7 @@ class LiveLoggerGui:
             self.canvas.draw_idle()
             self.request_canvas.draw_idle()
         Checkbutton(io_frame, text='Show requested input line', variable=self.show_requested_line, command=self._redraw_requested_input_plot).grid(row=5, column=0, columnspan=2, sticky='w')
+        Checkbutton(right_col, text='Show live line (default on)', variable=self.show_live_line, command=self._redraw_plot).pack(anchor='w')
 
     def browse_config(self) -> None:
         selected = filedialog.askopenfilename(filetypes=[('JSON files', '*.json'), ('All files', '*.*')])
@@ -162,6 +165,8 @@ class LiveLoggerGui:
             output_directory=self.output_directory.get().strip() or 'live_logs',
             output_prefix=self.output_prefix.get().strip() or 'power_live_log_com',
             parameters=default_live_parameters(channel=int(self.channel.get())),
+            power_schedule=list(self.loaded_power_schedule),
+            allow_named_voltage_current_fallback=True,
             duration_seconds=duration,
         )
 
@@ -183,10 +188,12 @@ class LiveLoggerGui:
 
     def _load_requested_input_from_config(self, path_text: str) -> None:
         self.loaded_schedule_points = []
+        self.loaded_power_schedule = []
         total_duration = 0.0
         try:
             content = json.loads(Path(path_text).read_text(encoding='utf-8'))
             schedule = content.get('power_schedule', [])
+            self.loaded_power_schedule = list(schedule)
             t = 0.0
             for step in schedule:
                 duration = float(step.get('duration_seconds', 0.0) or 0.0)
@@ -329,7 +336,12 @@ class LiveLoggerGui:
             for col in self.selected_cols:
                 y = list(self.live_data.get(col, []))
                 if x and y:
-                    self.axis.plot([datetime.fromtimestamp(v, tz=timezone.utc) for v in x[-len(y):]], y, label=col)
+                    timestamps = [datetime.fromtimestamp(v, tz=timezone.utc) for v in x[-len(y):]]
+                    marker_style = dict(marker='o', markersize=3)
+                    if self.show_live_line.get():
+                        self.axis.plot(timestamps, y, label=col, linewidth=1.0, **marker_style)
+                    else:
+                        self.axis.plot(timestamps, y, label=col, linestyle='None', **marker_style)
                     plotted_lines += 1
             if plotted_lines:
                 self.axis.legend(loc='best')
