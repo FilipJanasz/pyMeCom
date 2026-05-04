@@ -858,5 +858,24 @@
       "duration_seconds": 0.05,
       "enable_output": true
     }
+  ],
+  "acquisition_hz": 10.0,
+  "channel_setup_parameters": [
+    {
+      "key": "input_amplifier_gain",
+      "label": "Input amplifier gain",
+      "parameter_id": 1234,
+      "parameter_format": "FLOAT32",
+      "instance": 1,
+      "value": 1.0
+    },
+    {
+      "key": "input_acquisition_frequency",
+      "label": "Input acquisition frequency",
+      "parameter_id": 1235,
+      "parameter_format": "FLOAT32",
+      "instance": 1,
+      "value": 1000.0
+    }
   ]
 }

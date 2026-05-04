@@ -36,7 +36,7 @@ class LiveLoggerGui:
         self.serial_hint = StringVar(value='')
         self.address = StringVar(value='1')
         self.channel = StringVar(value='1')
-        self.hz = StringVar(value='1.0')
+        self.hz = StringVar(value='10.0')
         self.duration = StringVar(value='')
         self.output_directory = StringVar(value='live_logs')
         self.output_prefix = StringVar(value='power_live_log_com')
@@ -186,6 +186,7 @@ class LiveLoggerGui:
             power_schedule=normalized_schedule,
             allow_named_voltage_current_fallback=True,
             duration_seconds=duration,
+            acquisition_hz=float(self.hz.get()),
         )
 
     def load_config(self) -> None:
@@ -199,6 +200,7 @@ class LiveLoggerGui:
         self.address.set(str(cfg.address))
         self.channel.set(str(cfg.channel))
         self.duration.set('' if cfg.duration_seconds is None else str(cfg.duration_seconds))
+        self.hz.set(str(cfg.acquisition_hz))
         self.output_directory.set(cfg.output_directory)
         self.output_prefix.set(cfg.output_prefix)
         self._load_requested_input_from_config(path_text)

@@ -90,5 +90,7 @@
       "duration_seconds": 5,
       "enable_output": true
     }
-  ]
+  ],
+  "acquisition_hz": 10.0,
+  "channel_setup_parameters": []
 }
