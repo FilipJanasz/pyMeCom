@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import threading
 from collections import deque
 from datetime import datetime, timezone
@@ -40,12 +41,14 @@ class LiveLoggerGui:
         self.output_prefix = StringVar(value='power_live_log_com')
         self.show_requested_line = IntVar(value=1)
         self.show_live_line = IntVar(value=1)
+        self.enable_second_plot = IntVar(value=0)
 
         self.last_output_csv: Path | None = None
         self.run_thread: threading.Thread | None = None
         self.live_data: dict[str, deque[float]] = {}
         self.sample_index = deque(maxlen=MAX_POINTS)
         self.selected_cols: list[str] = []
+        self.second_plot_cols: list[str] = []
         self.loaded_schedule_points: list[tuple[float, float]] = []
         self.loaded_power_schedule = []
         self.animating = False
@@ -101,6 +104,7 @@ class LiveLoggerGui:
         Button(buttons, text='Start Logging', command=self.start_logging).pack(side=LEFT, padx=(0, 6))
         Button(buttons, text='Force Stop', command=self.force_stop).pack(side=LEFT, padx=(0, 6))
         Button(buttons, text='Select Columns for Live Plot', command=self.apply_plot_selection).pack(side=LEFT)
+        Button(buttons, text='Use selection for Plot 2', command=self.apply_second_plot_selection).pack(side=LEFT, padx=(6, 0))
 
         mid = Frame(self.root, padx=8, pady=4)
         mid.pack(fill=BOTH, expand=True)
@@ -147,6 +151,7 @@ class LiveLoggerGui:
             self.request_canvas.draw_idle()
         Checkbutton(io_frame, text='Show requested input line', variable=self.show_requested_line, command=self._redraw_requested_input_plot).grid(row=5, column=0, columnspan=2, sticky='w')
         Checkbutton(right_col, text='Show live line (default on)', variable=self.show_live_line, command=self._redraw_plot).pack(anchor='w')
+        Checkbutton(right_col, text='Enable second live plot (defaults to diff voltage 1/2)', variable=self.enable_second_plot, command=self._redraw_plot).pack(anchor='w')
 
     def browse_config(self) -> None:
         selected = filedialog.askopenfilename(filetypes=[('JSON files', '*.json'), ('All files', '*.*')])
@@ -244,6 +249,14 @@ class LiveLoggerGui:
             return
         self._redraw_plot()
 
+    def apply_second_plot_selection(self) -> None:
+        requested_cols = [self.columns_list.get(i) for i in self.columns_list.curselection()]
+        if requested_cols:
+            self.second_plot_cols = requested_cols
+            for col in self.second_plot_cols:
+                self.live_data.setdefault(col, deque(maxlen=MAX_POINTS))
+            self._redraw_plot()
+
     def _apply_double_clicked_column(self, event) -> None:
         idx = self.columns_list.nearest(event.y)
         if idx < 0:
@@ -252,7 +265,7 @@ class LiveLoggerGui:
         self.columns_list.selection_set(idx)
         requested_cols = [self.columns_list.get(idx)]
         self.selected_cols = requested_cols
-        for col in self.selected_cols:
+        for col in self.selected_cols + self.second_plot_cols:
             self.live_data.setdefault(col, deque(maxlen=MAX_POINTS))
         self._redraw_plot()
 
@@ -273,10 +286,13 @@ class LiveLoggerGui:
         if not self.selected_cols:
             default_col = next((spec.label for spec in cfg.parameters if 'act u' in spec.label.lower()), cfg.parameters[0].label)
             self.selected_cols = [default_col]
+        if not self.second_plot_cols:
+            default_second = [spec.label for spec in cfg.parameters if spec.label.startswith('1046.1:') or spec.label.startswith('1046.2:')]
+            self.second_plot_cols = default_second[:2]
         for idx, spec in enumerate(cfg.parameters):
             if spec.label in self.selected_cols:
                 self.columns_list.selection_set(idx)
-        for col in self.selected_cols:
+        for col in self.selected_cols + self.second_plot_cols:
             self.live_data.setdefault(col, deque(maxlen=MAX_POINTS))
 
         self.animating = True
@@ -317,7 +333,7 @@ class LiveLoggerGui:
                     stop_requested=lambda: self.stop_requested,
                 )
             except Exception as exc:
-                error_message = str(exc)
+                error_message = self._format_run_error(exc)
                 self.root.after(0, lambda msg=error_message: messagebox.showerror('Run failed', msg))
             finally:
                 self.animating = False
@@ -332,30 +348,39 @@ class LiveLoggerGui:
         self.root.after(500, self._schedule_plot_refresh)
 
     def _redraw_plot(self) -> None:
-        if self.axis is None or self.canvas is None:
+        if self.figure is None or self.canvas is None:
             return
-        self.axis.clear()
-        if self.selected_cols:
-            x = list(self.sample_index)
-            plotted_lines = 0
-            for col in self.selected_cols:
-                y = list(self.live_data.get(col, []))
-                if x and y:
-                    timestamps = [datetime.fromtimestamp(v, tz=timezone.utc) for v in x[-len(y):]]
-                    marker_style = dict(marker='o', markersize=3)
-                    if self.show_live_line.get():
-                        self.axis.plot(timestamps, y, label=col, linewidth=1.0, **marker_style)
-                    else:
-                        self.axis.plot(timestamps, y, label=col, linestyle='None', **marker_style)
-                    plotted_lines += 1
-            if plotted_lines:
-                self.axis.legend(loc='best')
-        self.axis.set_title('Live plot')
-        self.axis.set_xlabel('Timestamp (UTC)')
-        if mdates is not None:
-            self.axis.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
-        self.axis.grid(True, which='major', linestyle='--', alpha=0.6)
+        self.figure.clear()
+        has_second = bool(self.enable_second_plot.get())
+        primary_axis = self.figure.add_subplot(121 if has_second else 111)
+        self._draw_series_on_axis(primary_axis, self.selected_cols, 'Live plot')
+        if has_second:
+            secondary_axis = self.figure.add_subplot(122)
+            self._draw_series_on_axis(secondary_axis, self.second_plot_cols, 'Live plot 2')
+        self.figure.tight_layout()
         self.canvas.draw_idle()
+
+    def _draw_series_on_axis(self, axis, columns: list[str], title: str) -> None:
+        axis.clear()
+        x = list(self.sample_index)
+        plotted_lines = 0
+        for col in columns:
+            y = list(self.live_data.get(col, []))
+            if x and y:
+                timestamps = [datetime.fromtimestamp(v, tz=timezone.utc) for v in x[-len(y):]]
+                marker_style = dict(marker='o', markersize=3)
+                if self.show_live_line.get():
+                    axis.plot(timestamps, y, label=col, linewidth=1.0, **marker_style)
+                else:
+                    axis.plot(timestamps, y, label=col, linestyle='None', **marker_style)
+                plotted_lines += 1
+        if plotted_lines:
+            axis.legend(loc='best')
+        axis.set_title(title)
+        axis.set_xlabel('Timestamp (UTC)')
+        if mdates is not None:
+            axis.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
+        axis.grid(True, which='major', linestyle='--', alpha=0.6)
 
     def _redraw_requested_input_plot(self) -> None:
         if self.request_axis is None or self.request_canvas is None:
@@ -375,6 +400,27 @@ class LiveLoggerGui:
         self.request_axis.set_ylabel('Set voltage')
         self.request_axis.grid(True, which='major', linestyle='--', alpha=0.6)
         self.request_canvas.draw_idle()
+
+    def _format_run_error(self, exc: Exception) -> str:
+        raw_message = str(exc).strip() or exc.__class__.__name__
+        details: list[str] = [raw_message]
+        m = re.search(r"device\s+(\d+)\s+raised\s+(.+)", raw_message, flags=re.IGNORECASE)
+        if m:
+            device_id = m.group(1)
+            device_error = m.group(2).strip()
+            details.append('')
+            details.append(f'Controller at address {device_id} rejected a command: {device_error}.')
+            details.append('Most common causes:')
+            details.append('- Address/channel mismatch (GUI Address/Channel not matching connected hardware).')
+            details.append('- Requested setpoint outside controller limits (e.g. voltage/current/temperature).')
+            details.append('- Unit mismatch in the loaded JSON schedule or parameter mapping.')
+            details.append('')
+            details.append('Quick checks:')
+            details.append(f"- Confirm Address={self.address.get().strip() or '?'} and Channel={self.channel.get().strip() or '?'} are correct.")
+            details.append('- Open the loaded JSON and verify every setpoint is within your controller limits.')
+            if self.config_path.get().strip():
+                details.append(f"- Loaded config: {self.config_path.get().strip()}")
+        return '\n'.join(details)
 
     def force_stop(self) -> None:
         self.stop_requested = True
