@@ -55,6 +55,7 @@ class LiveLoggerGui:
         self.animating = False
         self.stop_requested = False
         self.status_text = StringVar(value='Controller status: unknown')
+        self.status_indicator_text = StringVar(value='●')
         self.sample_rate_text = StringVar(value='Measured acquisition rate: n/a')
         self._last_sample_ts: float | None = None
 
@@ -98,7 +99,9 @@ class LiveLoggerGui:
         Label(io_frame, text='Output Prefix').grid(row=4, column=0, sticky='w')
         Entry(io_frame, textvariable=self.output_prefix, width=42).grid(row=4, column=1, columnspan=4, sticky='we')
 
-        Label(top, textvariable=self.status_text).grid(row=1, column=0, columnspan=2, sticky='w', pady=(6, 0))
+        self.status_indicator_label = Label(top, textvariable=self.status_indicator_text, fg='goldenrod', font=('TkDefaultFont', 12, 'bold'))
+        self.status_indicator_label.grid(row=1, column=0, sticky='w', pady=(6, 0))
+        Label(top, textvariable=self.status_text).grid(row=1, column=0, columnspan=2, sticky='w', padx=(18, 0), pady=(6, 0))
         Label(top, textvariable=self.sample_rate_text).grid(row=2, column=0, columnspan=2, sticky='w')
         conn_frame.grid_columnconfigure(1, weight=1)
         io_frame.grid_columnconfigure(1, weight=1)
@@ -297,6 +300,7 @@ class LiveLoggerGui:
             messagebox.showerror('Invalid Hz', f'Acquisition rate must be greater than or equal to {MIN_HZ:g} Hz for TEC polling.')
             return
         cfg = self._build_config()
+        self._set_controller_status('yellow', 'Controller status: connecting (starting logger)')
         self.columns_list.delete(0, END)
         for spec in cfg.parameters:
             self.columns_list.insert(END, spec.label)
@@ -318,6 +322,7 @@ class LiveLoggerGui:
 
         def on_started(path: Path) -> None:
             self.last_output_csv = path
+            self.root.after(0, lambda: self._set_controller_status('green', f'Controller status: connected (logging to {path.name})'))
 
         def on_row(row: dict[str, object]) -> None:
             t = row.get('OLE Automation Date')
@@ -356,9 +361,12 @@ class LiveLoggerGui:
                 )
             except Exception as exc:
                 error_message = self._format_run_error(exc)
+                self.root.after(0, lambda: self._set_controller_status('red', f'Controller status: not detected ({exc})'))
                 self.root.after(0, lambda msg=error_message: messagebox.showerror('Run failed', msg))
             finally:
                 self.animating = False
+                if self.stop_requested:
+                    self.root.after(0, lambda: self._set_controller_status('yellow', 'Controller status: stopped by user'))
 
         self.run_thread = threading.Thread(target=worker, daemon=True)
         self.run_thread.start()
@@ -483,17 +491,28 @@ class LiveLoggerGui:
                         enable_output=False,
                     )
                 )
-            self.status_text.set(f'Controller status: output forced to zero ({endpoint})')
+            self._set_controller_status('green', f'Controller status: output forced to zero ({endpoint})')
         except Exception as exc:
+            self._set_controller_status('red', f'Controller status: zero-output failed ({exc})')
             messagebox.showerror('Zero output failed', str(exc))
 
     def detect_controller(self) -> None:
         try:
+            self._set_controller_status('yellow', 'Controller status: connecting (detecting TEC)')
             logger = LiveLogger(self._build_config())
             _, endpoint = logger._open_session()
-            self.status_text.set(f'Controller status: connected ({endpoint})')
+            self._set_controller_status('green', f'Controller status: connected ({endpoint})')
         except Exception as exc:
-            self.status_text.set(f'Controller status: not detected ({exc})')
+            self._set_controller_status('red', f'Controller status: not detected ({exc})')
+
+    def _set_controller_status(self, state: str, text: str) -> None:
+        color_map = {
+            'red': 'firebrick',
+            'yellow': 'goldenrod',
+            'green': 'forest green',
+        }
+        self.status_indicator_label.configure(fg=color_map.get(state, 'black'))
+        self.status_text.set(text)
 
 
 def main() -> int:
