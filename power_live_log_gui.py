@@ -38,6 +38,7 @@ class LiveLoggerGui:
         self.duration = StringVar(value='')
         self.output_directory = StringVar(value='live_logs')
         self.output_prefix = StringVar(value='power_live_log_com')
+        self.show_requested_line = IntVar(value=1)
 
         self.last_output_csv: Path | None = None
         self.run_thread: threading.Thread | None = None
@@ -101,23 +102,29 @@ class LiveLoggerGui:
 
         mid = Frame(self.root, padx=8, pady=4)
         mid.pack(fill=BOTH, expand=True)
-        Label(mid, text='Columns to plot').pack(anchor='w')
-        scroller = Scrollbar(mid, orient=VERTICAL)
-        self.columns_list = Listbox(mid, selectmode='extended', yscrollcommand=scroller.set, height=6)
+        left_col = Frame(mid)
+        left_col.pack(side=LEFT, fill='y', padx=(0, 8))
+        Label(left_col, text='Columns to plot').pack(anchor='w')
+        scroller = Scrollbar(left_col, orient=VERTICAL)
+        self.columns_list = Listbox(left_col, selectmode='extended', yscrollcommand=scroller.set, height=8, width=24, exportselection=False)
         scroller.config(command=self.columns_list.yview)
-        self.columns_list.pack(side=LEFT, fill=BOTH, expand=True)
+        self.columns_list.pack(side=LEFT, fill='y')
         scroller.pack(side=RIGHT, fill='y')
 
-        self.plot_frame = Frame(self.root)
+        right_col = Frame(mid)
+        right_col.pack(side=LEFT, fill=BOTH, expand=True)
+        Label(right_col, text='Live plots').pack(anchor='w')
+        self.plot_frame = Frame(right_col)
         self.plot_frame.pack(fill=BOTH, expand=True)
         self.canvas = None
         self.figure = None
         self.axis = None
         self.request_axis = None
         if Figure is not None:
-            self.figure = Figure(figsize=(8, 6), dpi=100)
-            self.axis = self.figure.add_subplot(211)
-            self.request_axis = self.figure.add_subplot(212)
+            self.figure = Figure(figsize=(9, 5), dpi=100)
+            grid = self.figure.add_gridspec(2, 1, height_ratios=[4, 1], hspace=0.5)
+            self.axis = self.figure.add_subplot(grid[0])
+            self.request_axis = self.figure.add_subplot(grid[1])
             self.canvas = FigureCanvasTkAgg(self.figure, master=self.plot_frame)
             self.canvas.get_tk_widget().pack(fill=BOTH, expand=True)
             self.axis.set_title('Live plot (select columns then start)')
@@ -128,6 +135,7 @@ class LiveLoggerGui:
             self.request_axis.set_ylabel('Set voltage')
             self.request_axis.grid(True, which='major', linestyle='--', alpha=0.6)
             self.canvas.draw_idle()
+        Checkbutton(io_frame, text='Show requested input line', variable=self.show_requested_line, command=self._redraw_requested_input_plot).grid(row=5, column=0, columnspan=2, sticky='w')
 
     def browse_config(self) -> None:
         selected = filedialog.askopenfilename(filetypes=[('JSON files', '*.json'), ('All files', '*.*')])
@@ -207,12 +215,14 @@ class LiveLoggerGui:
                 self.load_config()
 
     def apply_plot_selection(self) -> None:
-        self.selected_cols = [self.columns_list.get(i) for i in self.columns_list.curselection()]
+        requested_cols = [self.columns_list.get(i) for i in self.columns_list.curselection()]
+        if requested_cols:
+            self.selected_cols = requested_cols
+            for col in self.selected_cols:
+                self.live_data.setdefault(col, deque(maxlen=MAX_POINTS))
         if not self.selected_cols:
             messagebox.showwarning('No columns', 'Select one or more columns.')
             return
-        self.live_data = {name: deque(maxlen=MAX_POINTS) for name in self.selected_cols}
-        self.sample_index = deque(maxlen=MAX_POINTS)
         self._redraw_plot()
 
     def start_logging(self) -> None:
@@ -230,11 +240,14 @@ class LiveLoggerGui:
             self.columns_list.insert(END, spec.label)
 
         if not self.selected_cols:
-            self.selected_cols = [cfg.parameters[0].label]
+            default_col = next((spec.label for spec in cfg.parameters if spec.label == 'act U'), cfg.parameters[0].label)
+            self.selected_cols = [default_col]
             self.live_data = {self.selected_cols[0]: deque(maxlen=MAX_POINTS)}
-        self.sample_index = deque(maxlen=MAX_POINTS)
+        for idx, spec in enumerate(cfg.parameters):
+            if spec.label in self.selected_cols:
+                self.columns_list.selection_set(idx)
         for col in self.selected_cols:
-            self.live_data[col] = deque(maxlen=MAX_POINTS)
+            self.live_data.setdefault(col, deque(maxlen=MAX_POINTS))
 
         self.animating = True
         self._schedule_plot_refresh()
@@ -307,8 +320,11 @@ class LiveLoggerGui:
         if self.loaded_schedule_points:
             x_vals = [x for x, _ in self.loaded_schedule_points]
             y_vals = [y for _, y in self.loaded_schedule_points]
-            self.request_axis.plot(x_vals, y_vals, color='tab:orange', linewidth=1.5)
-            self.request_axis.set_title('Requested input from loaded JSON')
+            if self.show_requested_line.get():
+                self.request_axis.plot(x_vals, y_vals, color='tab:orange', linewidth=1.2, marker='o', markersize=2.5)
+                self.request_axis.set_title('Requested input from loaded JSON')
+            else:
+                self.request_axis.set_title('Requested input hidden (enabled by checkbox)')
         else:
             self.request_axis.set_title('Requested input from loaded JSON (no power_schedule)')
         self.request_axis.set_xlabel('Seconds')
