@@ -11,9 +11,11 @@ from tkinter import BOTH, END, LEFT, RIGHT, VERTICAL, Button, Checkbutton, Entry
 from workflows.automation.common.live_logger import LiveLogger, LiveLoggerConfig, default_live_parameters
 
 try:
+    import matplotlib.dates as mdates
     from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
     from matplotlib.figure import Figure
 except Exception:
+    mdates = None
     FigureCanvasTkAgg = None
     Figure = None
 
@@ -42,6 +44,7 @@ class LiveLoggerGui:
         self.live_data: dict[str, deque[float]] = {}
         self.sample_index = deque(maxlen=MAX_POINTS)
         self.selected_cols: list[str] = []
+        self.loaded_schedule_points: list[tuple[float, float]] = []
         self.animating = False
         self.stop_requested = False
         self.status_text = StringVar(value='Controller status: unknown')
@@ -52,30 +55,43 @@ class LiveLoggerGui:
     def _build_ui(self) -> None:
         top = Frame(self.root, padx=8, pady=8)
         top.pack(fill=BOTH)
+        top.grid_columnconfigure(0, weight=1)
+        top.grid_columnconfigure(1, weight=1)
 
         def add_row(label: str, var, row: int):
-            Label(top, text=label).grid(row=row, column=0, sticky='w')
-            Entry(top, textvariable=var, width=42).grid(row=row, column=1, sticky='we')
+            Label(conn_frame, text=label).grid(row=row, column=0, sticky='w')
+            Entry(conn_frame, textvariable=var, width=42).grid(row=row, column=1, sticky='we')
 
-        add_row('Config JSON', self.config_path, 0)
-        Button(top, text='Browse', command=self.browse_config).grid(row=0, column=2)
-        Button(top, text='Load JSON', command=self.load_config).grid(row=0, column=3)
-        Button(top, text='Save JSON', command=self.save_config).grid(row=0, column=4)
-        Button(top, text='Detect TEC', command=self.detect_controller).grid(row=0, column=5)
+        conn_frame = Frame(top, padx=4, pady=4, relief='groove', bd=1)
+        conn_frame.grid(row=0, column=0, sticky='nsew', padx=(0, 4))
+        io_frame = Frame(top, padx=4, pady=4, relief='groove', bd=1)
+        io_frame.grid(row=0, column=1, sticky='nsew', padx=(4, 0))
+
+        Label(conn_frame, text='Connection & Runtime', font=('TkDefaultFont', 10, 'bold')).grid(row=0, column=0, columnspan=4, sticky='w')
+        Label(io_frame, text='Config & Output', font=('TkDefaultFont', 10, 'bold')).grid(row=0, column=0, columnspan=5, sticky='w')
+
+        Label(io_frame, text='Config JSON').grid(row=1, column=0, sticky='w')
+        Entry(io_frame, textvariable=self.config_path, width=44).grid(row=1, column=1, columnspan=4, sticky='we')
+        Button(io_frame, text='Browse', command=self.browse_config).grid(row=2, column=1, sticky='w')
+        Button(io_frame, text='Load JSON', command=self.load_config).grid(row=2, column=2, sticky='w')
+        Button(io_frame, text='Save JSON', command=self.save_config).grid(row=2, column=3, sticky='w')
 
         add_row('Serial Port', self.serial_port, 1)
-        Checkbutton(top, text='Serial autodetect', variable=self.serial_autodetect).grid(row=1, column=2, sticky='w')
+        Checkbutton(conn_frame, text='Serial autodetect', variable=self.serial_autodetect).grid(row=1, column=2, sticky='w')
         add_row('Serial Hint', self.serial_hint, 2)
         add_row('Address', self.address, 3)
         add_row('Channel', self.channel, 4)
         add_row('Hz', self.hz, 5)
         add_row('Duration Seconds (blank=run forever)', self.duration, 6)
-        add_row('Output Directory', self.output_directory, 7)
-        add_row('Output Prefix', self.output_prefix, 8)
+        Button(conn_frame, text='Detect TEC', command=self.detect_controller).grid(row=7, column=1, sticky='w')
+        Label(io_frame, text='Output Directory').grid(row=3, column=0, sticky='w')
+        Entry(io_frame, textvariable=self.output_directory, width=42).grid(row=3, column=1, columnspan=4, sticky='we')
+        Label(io_frame, text='Output Prefix').grid(row=4, column=0, sticky='w')
+        Entry(io_frame, textvariable=self.output_prefix, width=42).grid(row=4, column=1, columnspan=4, sticky='we')
 
-        Label(top, textvariable=self.status_text).grid(row=9, column=0, columnspan=6, sticky='w', pady=(6, 0))
-        for col in range(6):
-            top.grid_columnconfigure(col, weight=1 if col == 1 else 0)
+        Label(top, textvariable=self.status_text).grid(row=1, column=0, columnspan=2, sticky='w', pady=(6, 0))
+        conn_frame.grid_columnconfigure(1, weight=1)
+        io_frame.grid_columnconfigure(1, weight=1)
 
         buttons = Frame(self.root, padx=8, pady=4)
         buttons.pack(fill=BOTH)
@@ -97,13 +113,20 @@ class LiveLoggerGui:
         self.canvas = None
         self.figure = None
         self.axis = None
+        self.request_axis = None
         if Figure is not None:
-            self.figure = Figure(figsize=(8, 4), dpi=100)
-            self.axis = self.figure.add_subplot(111)
+            self.figure = Figure(figsize=(8, 6), dpi=100)
+            self.axis = self.figure.add_subplot(211)
+            self.request_axis = self.figure.add_subplot(212)
             self.canvas = FigureCanvasTkAgg(self.figure, master=self.plot_frame)
             self.canvas.get_tk_widget().pack(fill=BOTH, expand=True)
             self.axis.set_title('Live plot (select columns then start)')
             self.axis.set_xlabel('Timestamp (UTC)')
+            self.axis.grid(True, which='major', linestyle='--', alpha=0.6)
+            self.request_axis.set_title('Requested input from loaded JSON')
+            self.request_axis.set_xlabel('Seconds')
+            self.request_axis.set_ylabel('Set voltage')
+            self.request_axis.grid(True, which='major', linestyle='--', alpha=0.6)
             self.canvas.draw_idle()
 
     def browse_config(self) -> None:
@@ -139,7 +162,24 @@ class LiveLoggerGui:
         self.duration.set('' if cfg.duration_seconds is None else str(cfg.duration_seconds))
         self.output_directory.set(cfg.output_directory)
         self.output_prefix.set(cfg.output_prefix)
+        self._load_requested_input_from_config(path_text)
         self._remember_last_config_path(path_text)
+
+    def _load_requested_input_from_config(self, path_text: str) -> None:
+        self.loaded_schedule_points = []
+        try:
+            content = json.loads(Path(path_text).read_text(encoding='utf-8'))
+            schedule = content.get('power_schedule', [])
+            t = 0.0
+            for step in schedule:
+                duration = float(step.get('duration_seconds', 0.0) or 0.0)
+                set_voltage = float(step.get('set_voltage', 0.0) or 0.0)
+                self.loaded_schedule_points.append((t, set_voltage))
+                t += duration
+                self.loaded_schedule_points.append((t, set_voltage))
+        except Exception:
+            self.loaded_schedule_points = []
+        self._redraw_requested_input_plot()
 
     def save_config(self) -> None:
         path_text = self.config_path.get().strip() or filedialog.asksaveasfilename(defaultextension='.json', filetypes=[('JSON files', '*.json')])
@@ -197,7 +237,8 @@ class LiveLoggerGui:
         def on_row(row: dict[str, object]) -> None:
             t = row.get('OLE Automation Date')
             if isinstance(t, (float, int)):
-                self.sample_index.append(float(t))
+                unix_ts = (float(t) - 25569.0) * 86400.0
+                self.sample_index.append(unix_ts)
             else:
                 self.sample_index.append(datetime.now(timezone.utc).timestamp())
             for col in self.selected_cols:
@@ -239,10 +280,29 @@ class LiveLoggerGui:
             for col in self.selected_cols:
                 y = list(self.live_data.get(col, []))
                 if x and y:
-                    self.axis.plot(x[-len(y):], y, label=col)
+                    self.axis.plot([datetime.fromtimestamp(v, tz=timezone.utc) for v in x[-len(y):]], y, label=col)
             self.axis.legend(loc='best')
         self.axis.set_title('Live plot')
         self.axis.set_xlabel('Timestamp (UTC)')
+        if mdates is not None:
+            self.axis.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
+        self.axis.grid(True, which='major', linestyle='--', alpha=0.6)
+        self.canvas.draw_idle()
+
+    def _redraw_requested_input_plot(self) -> None:
+        if self.request_axis is None or self.canvas is None:
+            return
+        self.request_axis.clear()
+        if self.loaded_schedule_points:
+            x_vals = [x for x, _ in self.loaded_schedule_points]
+            y_vals = [y for _, y in self.loaded_schedule_points]
+            self.request_axis.plot(x_vals, y_vals, color='tab:orange', linewidth=1.5)
+            self.request_axis.set_title('Requested input from loaded JSON')
+        else:
+            self.request_axis.set_title('Requested input from loaded JSON (no power_schedule)')
+        self.request_axis.set_xlabel('Seconds')
+        self.request_axis.set_ylabel('Set voltage')
+        self.request_axis.grid(True, which='major', linestyle='--', alpha=0.6)
         self.canvas.draw_idle()
 
     def force_stop(self) -> None:
