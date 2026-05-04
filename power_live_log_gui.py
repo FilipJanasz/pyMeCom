@@ -23,7 +23,6 @@ except Exception:
 LAST_CONFIG_PATH = Path('.last_live_logger_gui_config')
 MAX_POINTS = 600
 MIN_HZ = 0.1
-MAX_HZ = 20.0
 
 
 class LiveLoggerGui:
@@ -91,7 +90,7 @@ class LiveLoggerGui:
         add_row('Serial Hint', self.serial_hint, 2)
         add_row('Address', self.address, 3)
         add_row('Channel', self.channel, 4)
-        add_row(f'Hz ({MIN_HZ:g}-{MAX_HZ:g})', self.hz, 5)
+        add_row(f'Hz (min {MIN_HZ:g})', self.hz, 5)
         add_row('Duration Seconds (blank=run forever)', self.duration, 6)
         Button(conn_frame, text='Detect TEC', command=self.detect_controller).grid(row=7, column=1, sticky='w')
         Label(io_frame, text='Output Directory').grid(row=3, column=0, sticky='w')
@@ -258,11 +257,14 @@ class LiveLoggerGui:
 
     def apply_second_plot_selection(self) -> None:
         requested_cols = [self.columns_list.get(i) for i in self.columns_list.curselection()]
-        if requested_cols:
-            self.second_plot_cols = requested_cols
-            for col in self.second_plot_cols:
-                self.live_data.setdefault(col, deque(maxlen=MAX_POINTS))
-            self._redraw_plot()
+        if not requested_cols:
+            messagebox.showwarning('No columns', 'Select one or more columns for Plot 2.')
+            return
+        self.second_plot_cols = requested_cols
+        self.enable_second_plot.set(1)
+        for col in self.second_plot_cols:
+            self.live_data.setdefault(col, deque(maxlen=MAX_POINTS))
+        self._redraw_plot()
 
     def _apply_double_clicked_column(self, event) -> None:
         idx = self.columns_list.nearest(event.y)
@@ -289,10 +291,10 @@ class LiveLoggerGui:
         try:
             hz = float(self.hz.get())
         except ValueError:
-            messagebox.showerror('Invalid Hz', f'Acquisition rate must be a number between {MIN_HZ:g} and {MAX_HZ:g} Hz.')
+            messagebox.showerror('Invalid Hz', f'Acquisition rate must be a number greater than or equal to {MIN_HZ:g} Hz.')
             return
-        if hz < MIN_HZ or hz > MAX_HZ:
-            messagebox.showerror('Invalid Hz', f'Acquisition rate must be between {MIN_HZ:g} and {MAX_HZ:g} Hz for TEC polling.')
+        if hz < MIN_HZ:
+            messagebox.showerror('Invalid Hz', f'Acquisition rate must be greater than or equal to {MIN_HZ:g} Hz for TEC polling.')
             return
         cfg = self._build_config()
         self.columns_list.delete(0, END)
