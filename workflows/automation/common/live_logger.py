@@ -83,6 +83,8 @@ def default_live_parameters(channel: int = 1) -> List[LiveParameterSpec]:
         LiveParameterSpec("lr2_temp", "1044.2: LR2 Temp", parameter_id=1044, parameter_format="FLOAT32", instance=2),
         LiveParameterSpec("hr1_temp", "1045.1: HR1 Temp", parameter_id=1045, parameter_format="FLOAT32", instance=1),
         LiveParameterSpec("hr2_temp", "1045.2: HR2 Temp", parameter_id=1045, parameter_format="FLOAT32", instance=2),
+        LiveParameterSpec("hr_temp_diff_1", "1048.1: HR Temp Differential Input", parameter_id=1048, parameter_format="FLOAT32", instance=1),
+        LiveParameterSpec("hr_temp_diff_2", "1048.2: HR Temp Differential Input", parameter_id=1048, parameter_format="FLOAT32", instance=2),
         LiveParameterSpec("diff_voltage_1", "1046.1: Differential Voltage", parameter_id=1046, parameter_format="FLOAT32", instance=1),
         LiveParameterSpec("diff_voltage_2", "1046.2: Differential Voltage", parameter_id=1046, parameter_format="FLOAT32", instance=2),
     ]
@@ -177,6 +179,7 @@ class LiveLogger:
         duration_seconds: Optional[float] = None,
         started_callback: Optional[Callable[[Path], None]] = None,
         row_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
+        stop_requested: Optional[Callable[[], bool]] = None,
     ) -> Path:
         interval = 1.0 / hz
         out_dir = Path(self.config.output_directory)
@@ -265,6 +268,8 @@ class LiveLogger:
                     else:
                         schedule = []
 
+                if stop_requested is not None and stop_requested():
+                    break
                 if deadline is not None and time.monotonic() >= deadline:
                     break
                 sleep_for = interval - (time.monotonic() - tick)

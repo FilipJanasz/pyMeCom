@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import threading
 from collections import deque
+from datetime import datetime, timezone
 from dataclasses import asdict
 from pathlib import Path
 from tkinter import BOTH, END, LEFT, RIGHT, VERTICAL, Button, Checkbutton, Entry, Frame, IntVar, Label, Listbox, Scrollbar, StringVar, Tk, filedialog, messagebox
@@ -42,12 +43,14 @@ class LiveLoggerGui:
         self.sample_index = deque(maxlen=MAX_POINTS)
         self.selected_cols: list[str] = []
         self.animating = False
+        self.stop_requested = False
+        self.status_text = StringVar(value='Controller status: unknown')
 
         self._build_ui()
         self._load_last_used_config_if_present()
 
     def _build_ui(self) -> None:
-        top = Frame(self.root)
+        top = Frame(self.root, padx=8, pady=8)
         top.pack(fill=BOTH)
 
         def add_row(label: str, var, row: int):
@@ -58,6 +61,7 @@ class LiveLoggerGui:
         Button(top, text='Browse', command=self.browse_config).grid(row=0, column=2)
         Button(top, text='Load JSON', command=self.load_config).grid(row=0, column=3)
         Button(top, text='Save JSON', command=self.save_config).grid(row=0, column=4)
+        Button(top, text='Detect TEC', command=self.detect_controller).grid(row=0, column=5)
 
         add_row('Serial Port', self.serial_port, 1)
         Checkbutton(top, text='Serial autodetect', variable=self.serial_autodetect).grid(row=1, column=2, sticky='w')
@@ -69,12 +73,17 @@ class LiveLoggerGui:
         add_row('Output Directory', self.output_directory, 7)
         add_row('Output Prefix', self.output_prefix, 8)
 
-        buttons = Frame(self.root)
+        Label(top, textvariable=self.status_text).grid(row=9, column=0, columnspan=6, sticky='w', pady=(6, 0))
+        for col in range(6):
+            top.grid_columnconfigure(col, weight=1 if col == 1 else 0)
+
+        buttons = Frame(self.root, padx=8, pady=4)
         buttons.pack(fill=BOTH)
-        Button(buttons, text='Start Logging', command=self.start_logging).pack(side=LEFT)
+        Button(buttons, text='Start Logging', command=self.start_logging).pack(side=LEFT, padx=(0, 6))
+        Button(buttons, text='Force Stop', command=self.force_stop).pack(side=LEFT, padx=(0, 6))
         Button(buttons, text='Select Columns for Live Plot', command=self.apply_plot_selection).pack(side=LEFT)
 
-        mid = Frame(self.root)
+        mid = Frame(self.root, padx=8, pady=4)
         mid.pack(fill=BOTH, expand=True)
         Label(mid, text='Columns to plot').pack(anchor='w')
         scroller = Scrollbar(mid, orient=VERTICAL)
@@ -94,7 +103,7 @@ class LiveLoggerGui:
             self.canvas = FigureCanvasTkAgg(self.figure, master=self.plot_frame)
             self.canvas.get_tk_widget().pack(fill=BOTH, expand=True)
             self.axis.set_title('Live plot (select columns then start)')
-            self.axis.set_xlabel('Sample Index')
+            self.axis.set_xlabel('Timestamp (UTC)')
             self.canvas.draw_idle()
 
     def browse_config(self) -> None:
@@ -169,6 +178,7 @@ class LiveLoggerGui:
             messagebox.showwarning('Busy', 'Logger is already running.')
             return
 
+        self.stop_requested = False
         cfg = self._build_config()
         self.columns_list.delete(0, END)
         for spec in cfg.parameters:
@@ -185,8 +195,11 @@ class LiveLoggerGui:
             self.last_output_csv = path
 
         def on_row(row: dict[str, object]) -> None:
-            idx = len(self.sample_index)
-            self.sample_index.append(idx if not self.sample_index else self.sample_index[-1] + 1)
+            t = row.get('OLE Automation Date')
+            if isinstance(t, (float, int)):
+                self.sample_index.append(float(t))
+            else:
+                self.sample_index.append(datetime.now(timezone.utc).timestamp())
             for col in self.selected_cols:
                 try:
                     val = float(row.get(col, 'nan'))
@@ -196,7 +209,13 @@ class LiveLoggerGui:
 
         def worker() -> None:
             try:
-                LiveLogger(cfg).run(hz=float(self.hz.get()), duration_seconds=cfg.duration_seconds, started_callback=on_started, row_callback=on_row)
+                LiveLogger(cfg).run(
+                    hz=float(self.hz.get()),
+                    duration_seconds=cfg.duration_seconds,
+                    started_callback=on_started,
+                    row_callback=on_row,
+                    stop_requested=lambda: self.stop_requested,
+                )
             except Exception as exc:
                 self.root.after(0, lambda: messagebox.showerror('Run failed', str(exc)))
             finally:
@@ -223,8 +242,19 @@ class LiveLoggerGui:
                     self.axis.plot(x[-len(y):], y, label=col)
             self.axis.legend(loc='best')
         self.axis.set_title('Live plot')
-        self.axis.set_xlabel('Sample Index')
+        self.axis.set_xlabel('Timestamp (UTC)')
         self.canvas.draw_idle()
+
+    def force_stop(self) -> None:
+        self.stop_requested = True
+
+    def detect_controller(self) -> None:
+        try:
+            logger = LiveLogger(self._build_config())
+            _, endpoint = logger._open_session()
+            self.status_text.set(f'Controller status: connected ({endpoint})')
+        except Exception as exc:
+            self.status_text.set(f'Controller status: not detected ({exc})')
 
 
 def main() -> int:

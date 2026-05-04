@@ -8,7 +8,7 @@ serial_stub.Serial = object
 serial_stub.serialutil = types.SimpleNamespace(SerialException=Exception)
 sys.modules.setdefault('serial', serial_stub)
 
-from workflows.automation.common.live_logger import build_time_columns, ole_automation_date
+from workflows.automation.common.live_logger import build_time_columns, default_live_parameters, ole_automation_date
 
 
 class LiveLoggerFormattingTests(unittest.TestCase):
@@ -22,6 +22,11 @@ class LiveLoggerFormattingTests(unittest.TestCase):
         self.assertEqual(row['Time'], '12:34:56')
         self.assertEqual(row['Milliseconds'], 789)
         self.assertAlmostEqual(row['OLE Automation Date'], ole_automation_date(dt))
+
+    def test_default_parameters_include_hr_temp_differential_inputs(self):
+        labels = [spec.label for spec in default_live_parameters(channel=1)]
+        self.assertIn('1048.1: HR Temp Differential Input', labels)
+        self.assertIn('1048.2: HR Temp Differential Input', labels)
 
 
 if __name__ == '__main__':
