@@ -7,7 +7,7 @@ from collections import deque
 from datetime import datetime, timezone
 from dataclasses import asdict
 from pathlib import Path
-from tkinter import BOTH, END, LEFT, RIGHT, VERTICAL, Button, Checkbutton, Entry, Frame, IntVar, Label, Listbox, Scrollbar, StringVar, Tk, filedialog, messagebox
+from tkinter import BOTH, END, LEFT, RIGHT, VERTICAL, Button, Checkbutton, Entry, Frame, IntVar, Label, Listbox, Radiobutton, Scrollbar, StringVar, Tk, filedialog, messagebox
 
 from workflows.automation.common.live_logger import CalibrationStep, LiveLogger, LiveLoggerConfig, PowerScheduleStep, SafeChannelController, default_live_parameters
 from workflows.automation.common.run_config import RunConfig
@@ -92,6 +92,8 @@ class LiveLoggerGui:
         self.bath_standby_temp_c = StringVar(value='25.0')
         self.pump_safe_on = IntVar(value=1)
         self.run_mode = StringVar(value='TEC-only')
+        self.run_mode_selection = StringVar(value='Auto')
+        self.detected_mode = StringVar(value='TEC-only')
         self.huber_curve_c = StringVar(value='25,30,35,30,25')
         self.voltage_curve_v = StringVar(value='0.5,1.0,1.5,1.0,0.5')
         self.current_curve_a = StringVar(value='0.2,0.2,0.25,0.2,0.2')
@@ -143,7 +145,7 @@ class LiveLoggerGui:
         Button(io_frame, text='Browse', command=self.browse_config).grid(row=2, column=1, sticky='w')
         Button(io_frame, text='Load JSON', command=self.load_config).grid(row=2, column=2, sticky='w')
         Button(io_frame, text='Save JSON', command=self.save_config).grid(row=2, column=3, sticky='w')
-        Button(io_frame, text='Build Unified Example', command=self.save_unified_example_config).grid(row=2, column=4, sticky='w')
+        Button(io_frame, text='Build Unified Example JSON', command=self.save_unified_example_config).grid(row=2, column=4, sticky='w')
 
         add_row('Serial Port', self.serial_port, 1)
         Checkbutton(conn_frame, text='Serial autodetect', variable=self.serial_autodetect).grid(row=1, column=2, sticky='w')
@@ -161,7 +163,8 @@ class LiveLoggerGui:
         Entry(io_frame, textvariable=self.huber_port, width=42).grid(row=5, column=1, columnspan=4, sticky='we')
         Label(io_frame, text='Bath Standby °C').grid(row=6, column=0, sticky='w')
         Entry(io_frame, textvariable=self.bath_standby_temp_c, width=16).grid(row=6, column=1, sticky='w')
-        Checkbutton(io_frame, text='Pump ON in safe state', variable=self.pump_safe_on).grid(row=6, column=2, columnspan=2, sticky='w')
+        Checkbutton(io_frame, text='Pump ON in safe state', variable=self.pump_safe_on).grid(row=6, column=2, sticky='w')
+        Label(io_frame, text='(stop/error: keep bath pump running)').grid(row=6, column=3, columnspan=2, sticky='w')
         Label(io_frame, text='Huber Temp Curve °C (comma-separated)').grid(row=7, column=0, sticky='w')
         Entry(io_frame, textvariable=self.huber_curve_c, width=42).grid(row=7, column=1, columnspan=4, sticky='we')
         Label(io_frame, text='TEC Voltage Curve V (comma-separated)').grid(row=8, column=0, sticky='w')
@@ -170,13 +173,18 @@ class LiveLoggerGui:
         Entry(io_frame, textvariable=self.current_curve_a, width=42).grid(row=9, column=1, columnspan=4, sticky='we')
         Label(io_frame, text='Step Duration Seconds').grid(row=10, column=0, sticky='w')
         Entry(io_frame, textvariable=self.step_duration_s, width=16).grid(row=10, column=1, sticky='w')
+        Label(io_frame, text='Build Unified Example JSON uses the Huber/TEC curve fields as a starter config.').grid(row=10, column=2, columnspan=3, sticky='w')
 
         self.status_indicator_label = Label(top, textvariable=self.status_indicator_text, fg='goldenrod', font=('TkDefaultFont', 12, 'bold'))
         self.status_indicator_label.grid(row=1, column=0, sticky='w', pady=(6, 0))
         Label(top, textvariable=self.status_text).grid(row=1, column=0, columnspan=2, sticky='w', padx=(18, 0), pady=(6, 0))
         Label(top, textvariable=self.sample_rate_text).grid(row=2, column=0, columnspan=2, sticky='w')
         Label(top, text='Run mode:').grid(row=3, column=0, sticky='w')
-        Label(top, textvariable=self.run_mode, font=('TkDefaultFont', 9, 'bold')).grid(row=3, column=0, sticky='w', padx=(70, 0))
+        Radiobutton(top, text='Auto', variable=self.run_mode_selection, value='Auto').grid(row=3, column=0, sticky='w', padx=(70, 0))
+        Radiobutton(top, text='TEC-only', variable=self.run_mode_selection, value='TEC-only').grid(row=3, column=0, sticky='w', padx=(130, 0))
+        Radiobutton(top, text='Unified', variable=self.run_mode_selection, value='Unified').grid(row=3, column=0, sticky='w', padx=(220, 0))
+        Label(top, text='Detected from JSON:').grid(row=3, column=1, sticky='e', padx=(0, 110))
+        Label(top, textvariable=self.detected_mode, font=('TkDefaultFont', 9, 'bold')).grid(row=3, column=1, sticky='e')
         conn_frame.grid_columnconfigure(1, weight=1)
         io_frame.grid_columnconfigure(1, weight=1)
 
@@ -270,15 +278,16 @@ class LiveLoggerGui:
         if not path_text:
             return
         content = json.loads(Path(path_text).read_text(encoding='utf-8'))
-        if "steps" in content:
+        detected_mode = self._detect_mode_from_content(content)
+        self.detected_mode.set(detected_mode)
+        self.run_mode.set(detected_mode)
+        if detected_mode == "Unified":
             rcfg = RunConfig.from_dict(content)
-            self.run_mode.set('Unified')
             self.duration.set(str(sum(step.duration_s for step in rcfg.steps)))
             self.bath_standby_temp_c.set(str(rcfg.safety.bath_standby_setpoint_c))
             self.pump_safe_on.set(1 if rcfg.safety.pump_on_in_safe_state else 0)
         else:
             cfg = LiveLoggerConfig.from_json_file(path_text)
-            self.run_mode.set('TEC-only')
             self.serial_port.set(cfg.serial_port or '')
             self.serial_autodetect.set(1 if cfg.serial_port_autodetect else 0)
             self.serial_hint.set(cfg.serial_port_hint or '')
@@ -291,6 +300,24 @@ class LiveLoggerGui:
         self._load_requested_input_from_config(path_text)
         self._remember_last_config_path(path_text)
 
+    def _detect_mode_from_content(self, content: dict) -> str:
+        steps = content.get("steps")
+        if isinstance(steps, list) and steps:
+            return "Unified"
+        return "TEC-only"
+
+    def _validate_mode_compatibility(self, content: dict, requested_mode: str) -> str | None:
+        if requested_mode == "Unified":
+            steps = content.get("steps")
+            if not isinstance(steps, list) or not steps:
+                return "Unified mode requires a JSON with non-empty top-level 'steps'."
+            return None
+        if requested_mode == "TEC-only":
+            has_legacy_shape = isinstance(content.get("power_schedule"), list) or "transport" in content
+            if not has_legacy_shape:
+                return "TEC-only mode expects a live logger config (e.g. power_schedule/transport fields)."
+        return None
+
     def _load_requested_input_from_config(self, path_text: str) -> None:
         self.loaded_schedule_points = []
         self.loaded_temp_schedule_points = []
@@ -302,8 +329,10 @@ class LiveLoggerGui:
             unified_steps = content.get('steps', [])
             self.loaded_power_schedule = list(schedule)
             t = 0.0
+            detected_mode = self._detect_mode_from_content(content)
+            self.detected_mode.set(detected_mode)
+            self.run_mode.set(detected_mode)
             if unified_steps:
-                self.run_mode.set('Unified')
                 for step in unified_steps:
                     duration = float(step.get('duration_s', 0.0) or 0.0)
                     tec_power_raw = step.get('tec_power_w')
@@ -320,7 +349,6 @@ class LiveLoggerGui:
                     if bath_temp_raw is not None:
                         self.loaded_temp_schedule_points.append((t, bath_temp))
             else:
-                self.run_mode.set('TEC-only')
                 for step in schedule:
                     duration = float(step.get('duration_seconds', 0.0) or 0.0)
                     set_voltage = float(step.get('set_voltage', 0.0) or 0.0)
@@ -460,12 +488,22 @@ class LiveLoggerGui:
             messagebox.showerror('Invalid Hz', f'Acquisition rate must be greater than or equal to {MIN_HZ:g} Hz for TEC polling.')
             return
         path_text = self.config_path.get().strip()
+        if self.run_mode_selection.get() == 'Unified' and not path_text:
+            messagebox.showerror('Unified mode requires JSON', 'Select a unified JSON config file before starting Unified mode.')
+            return
         if path_text:
             try:
                 content = json.loads(Path(path_text).read_text(encoding='utf-8'))
             except Exception:
                 content = {}
-            if "steps" in content:
+            selected_mode = self.run_mode_selection.get()
+            effective_mode = selected_mode if selected_mode != 'Auto' else self._detect_mode_from_content(content)
+            mode_error = self._validate_mode_compatibility(content, effective_mode)
+            if mode_error:
+                messagebox.showerror('Run mode mismatch', mode_error)
+                return
+            self.run_mode.set(effective_mode)
+            if effective_mode == "Unified":
                 self._start_unified_run(path_text, hz)
                 return
         cfg = self._build_config()
