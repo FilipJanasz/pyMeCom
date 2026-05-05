@@ -37,6 +37,7 @@ This repository is being extended to support a single calibration workflow that 
 - **Adapters**
   - `TecAdapter` (wrap existing MeCom interactions)
   - `HuberAdapter` (wrap external Huber client/repo)
+  - `HuberWorkflowAdapter` (workflow-level capability-aware wrapper around `huberStuff/pyPbCmd/huber_adapter.py`)
 - **RunEngine**
   - Owns schedule progression, timing, and coordinated setpoint application
 - **Logger**
@@ -48,3 +49,7 @@ This repository is being extended to support a single calibration workflow that 
 
 - Existing TEC calibration and live logging workflows remain available.
 - Integration work should reuse existing scheduler/logger patterns where practical.
+
+### Huber wrapper capability note
+
+The workflow Huber wrapper (`workflows/automation/huber/`) uses capability checks for optional pump control. When pump control is unavailable in the connected client, pump requests are logged as unsupported instead of attempting protocol-level fallbacks.
