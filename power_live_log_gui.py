@@ -29,6 +29,50 @@ MAX_POINTS = 600
 MIN_HZ = 0.1
 
 
+class NoopTecAdapter:
+    supports_legacy_voltage_mode = False
+
+    def connect(self) -> bool:
+        return True
+
+    def set_power(self, power_w: float) -> None:
+        return None
+
+    def set_voltage_current(self, voltage_v: float, current_a: float) -> None:
+        return None
+
+    def read_actual_power(self):
+        return None
+
+    def safe_output(self, power_w: float = 0.0) -> None:
+        return None
+
+    def close(self) -> None:
+        return None
+
+
+class NoopBathAdapter:
+    supports_pump_control = True
+
+    def connect(self) -> bool:
+        return True
+
+    def read_bath_temp(self):
+        return None
+
+    def read_setpoint(self):
+        return None
+
+    def set_setpoint(self, temp_c: float) -> bool:
+        return True
+
+    def set_pump_state(self, on_off: bool) -> bool:
+        return True
+
+    def close(self) -> None:
+        return None
+
+
 class LiveLoggerGui:
     def __init__(self, root: Tk):
         self.root = root
@@ -167,7 +211,7 @@ class LiveLoggerGui:
         self.canvas = None
         self.figure = None
         self.axis = None
-        self.request_axis = None
+        self.request_axes = None
         self.request_canvas = None
         self.request_figure = None
         if Figure is not None:
@@ -178,14 +222,16 @@ class LiveLoggerGui:
             self.axis.set_title('Live plot (select columns then start)')
             self.axis.set_xlabel('Timestamp (UTC)')
             self.axis.grid(True, which='major', linestyle='--', alpha=0.6)
-            self.request_figure = Figure(figsize=(5.5, 1.8), dpi=100)
-            self.request_axis = self.request_figure.add_subplot(111)
+            self.request_figure = Figure(figsize=(5.5, 2.8), dpi=100)
+            self.request_axes = self.request_figure.subplots(2, 1, sharex=True)
             self.request_canvas = FigureCanvasTkAgg(self.request_figure, master=self.request_plot_frame)
             self.request_canvas.get_tk_widget().pack(fill=BOTH, expand=True)
-            self.request_axis.set_title('Requested input from loaded JSON')
-            self.request_axis.set_xlabel('Seconds')
-            self.request_axis.set_ylabel('Requested value')
-            self.request_axis.grid(True, which='major', linestyle='--', alpha=0.6)
+            self.request_axes[0].set_title('Requested input from loaded JSON')
+            self.request_axes[0].set_ylabel('TEC requested W')
+            self.request_axes[1].set_xlabel('Seconds')
+            self.request_axes[1].set_ylabel('Huber requested °C')
+            self.request_axes[0].grid(True, which='major', linestyle='--', alpha=0.6)
+            self.request_axes[1].grid(True, which='major', linestyle='--', alpha=0.6)
             self.canvas.draw_idle()
             self.request_canvas.draw_idle()
         Checkbutton(io_frame, text='Show requested input line', variable=self.show_requested_line, command=self._redraw_requested_input_plot).grid(row=12, column=0, columnspan=2, sticky='w')
@@ -260,13 +306,19 @@ class LiveLoggerGui:
                 self.run_mode.set('Unified')
                 for step in unified_steps:
                     duration = float(step.get('duration_s', 0.0) or 0.0)
-                    tec_power = float(step.get('tec_power_w', 0.0) or 0.0)
-                    bath_temp = float(step.get('bath_setpoint_c', 25.0) or 25.0)
-                    self.loaded_schedule_points.append((t, tec_power))
-                    self.loaded_temp_schedule_points.append((t, bath_temp))
+                    tec_power_raw = step.get('tec_power_w')
+                    bath_temp_raw = step.get('bath_setpoint_c')
+                    if tec_power_raw is not None:
+                        tec_power = float(tec_power_raw)
+                        self.loaded_schedule_points.append((t, tec_power))
+                    if bath_temp_raw is not None:
+                        bath_temp = float(bath_temp_raw)
+                        self.loaded_temp_schedule_points.append((t, bath_temp))
                     t += duration
-                    self.loaded_schedule_points.append((t, tec_power))
-                    self.loaded_temp_schedule_points.append((t, bath_temp))
+                    if tec_power_raw is not None:
+                        self.loaded_schedule_points.append((t, tec_power))
+                    if bath_temp_raw is not None:
+                        self.loaded_temp_schedule_points.append((t, bath_temp))
             else:
                 self.run_mode.set('TEC-only')
                 for step in schedule:
@@ -493,12 +545,15 @@ class LiveLoggerGui:
         self.stop_requested = False
         self.animating = True
         self._schedule_plot_refresh()
+        raw_content = json.loads(Path(path_text).read_text(encoding='utf-8'))
         run_cfg = RunConfig.from_json_file(path_text)
         run_cfg.safety.bath_standby_setpoint_c = float(self.bath_standby_temp_c.get())
         run_cfg.safety.pump_on_in_safe_state = bool(self.pump_safe_on.get())
-        tec_cfg = self._build_config()
-        tec_adapter = TecPowerAdapter(tec_cfg)
-        bath_adapter = HuberWorkflowAdapter(port=self.huber_port.get().strip() or None)
+        raw_steps = list(raw_content.get('steps') or [])
+        has_any_tec_request = bool(raw_content.get('power_schedule')) or any('tec_power_w' in step for step in raw_steps)
+        has_any_huber_request = any('bath_setpoint_c' in step for step in raw_steps)
+        tec_adapter = TecPowerAdapter(self._build_config()) if has_any_tec_request else NoopTecAdapter()
+        bath_adapter = HuberWorkflowAdapter(port=self.huber_port.get().strip() or None) if has_any_huber_request else NoopBathAdapter()
         engine = DualDeviceRunEngine(tec_adapter, bath_adapter, output_directory=self.output_directory.get().strip() or 'live_logs', sample_hz=hz)
         self.unified_engine = engine
 
@@ -578,27 +633,42 @@ class LiveLoggerGui:
         axis.grid(True, which='major', linestyle='--', alpha=0.6)
 
     def _redraw_requested_input_plot(self) -> None:
-        if self.request_axis is None or self.request_canvas is None:
+        if self.request_axes is None or self.request_canvas is None:
             return
-        self.request_axis.clear()
-        if self.loaded_schedule_points:
-            x_vals = [x for x, _ in self.loaded_schedule_points]
-            y_vals = [y for _, y in self.loaded_schedule_points]
-            if self.show_requested_line.get():
-                self.request_axis.plot(x_vals, y_vals, color='tab:orange', linewidth=1.2, marker='o', markersize=2.5, label='TEC requested')
-                if getattr(self, 'loaded_temp_schedule_points', None):
-                    tx = [x for x, _ in self.loaded_temp_schedule_points]
-                    ty = [y for _, y in self.loaded_temp_schedule_points]
-                    self.request_axis.plot(tx, ty, color='tab:blue', linewidth=1.2, marker='o', markersize=2.5, label='Huber requested °C')
-                self.request_axis.legend(loc='best')
-                self.request_axis.set_title('Requested input from loaded JSON')
+        tec_axis, huber_axis = self.request_axes
+        tec_axis.clear()
+        huber_axis.clear()
+        tec_axis.set_title('Requested input from loaded JSON')
+        huber_axis.set_xlabel('Seconds')
+        tec_axis.set_ylabel('TEC requested W')
+        huber_axis.set_ylabel('Huber requested °C')
+
+        has_tec = bool(self.loaded_schedule_points)
+        has_huber = bool(getattr(self, 'loaded_temp_schedule_points', None))
+
+        if self.show_requested_line.get():
+            if has_tec:
+                x_vals = [x for x, _ in self.loaded_schedule_points]
+                y_vals = [y for _, y in self.loaded_schedule_points]
+                tec_axis.plot(x_vals, y_vals, color='tab:orange', linewidth=1.2, marker='o', markersize=2.5, label='TEC requested')
+                tec_axis.legend(loc='best')
             else:
-                self.request_axis.set_title('Requested input hidden (enabled by checkbox)')
+                tec_axis.text(0.5, 0.5, 'No TEC requests in loaded JSON', transform=tec_axis.transAxes, ha='center', va='center')
+
+            if has_huber:
+                tx = [x for x, _ in self.loaded_temp_schedule_points]
+                ty = [y for _, y in self.loaded_temp_schedule_points]
+                huber_axis.plot(tx, ty, color='tab:blue', linewidth=1.2, marker='o', markersize=2.5, label='Huber requested °C')
+                huber_axis.legend(loc='best')
+            else:
+                huber_axis.text(0.5, 0.5, 'No Huber requests in loaded JSON', transform=huber_axis.transAxes, ha='center', va='center')
         else:
-            self.request_axis.set_title('Requested input from loaded JSON (no power_schedule)')
-        self.request_axis.set_xlabel('Seconds')
-        self.request_axis.set_ylabel('TEC power / Huber °C')
-        self.request_axis.grid(True, which='major', linestyle='--', alpha=0.6)
+            tec_axis.text(0.5, 0.5, 'Requested input hidden (enabled by checkbox)', transform=tec_axis.transAxes, ha='center', va='center')
+            huber_axis.text(0.5, 0.5, 'Requested input hidden (enabled by checkbox)', transform=huber_axis.transAxes, ha='center', va='center')
+
+        tec_axis.grid(True, which='major', linestyle='--', alpha=0.6)
+        huber_axis.grid(True, which='major', linestyle='--', alpha=0.6)
+        self.request_figure.tight_layout()
         self.request_canvas.draw_idle()
 
     def _format_run_error(self, exc: Exception) -> str:
