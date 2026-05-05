@@ -129,6 +129,8 @@ class DualDeviceRunEngine:
                 "step_name",
                 "bath_setpoint_c",
                 "tec_power_w",
+                "tec_voltage_v",
+                "tec_current_a",
                 "bath_temp_c",
                 "bath_current_setpoint_c",
                 "tec_actual_power_w",
@@ -176,6 +178,11 @@ class DualDeviceRunEngine:
 
     def _apply_step(self, step: UnifiedStep, legacy_power_policy: str) -> None:
         self.bath_adapter.set_setpoint(step.bath_setpoint_c)
+        if (step.tec_voltage_v is not None or step.tec_current_a is not None) and hasattr(self.tec_adapter, "set_voltage_current"):
+            voltage_v = float(step.tec_voltage_v or 0.0)
+            current_a = float(step.tec_current_a or 0.0)
+            self.tec_adapter.set_voltage_current(voltage_v, current_a)
+            return
         if legacy_power_policy == LegacyPowerPolicy.LEGACY_VOLTAGE_MODE.value and hasattr(self.tec_adapter, "apply_legacy_step"):
             self.tec_adapter.apply_legacy_step(step)
         else:
@@ -190,6 +197,8 @@ class DualDeviceRunEngine:
                 "step_name": step.name,
                 "bath_setpoint_c": step.bath_setpoint_c,
                 "tec_power_w": step.tec_power_w,
+                "tec_voltage_v": step.tec_voltage_v,
+                "tec_current_a": step.tec_current_a,
                 "bath_temp_c": self.bath_adapter.read_bath_temp(),
                 "bath_current_setpoint_c": self.bath_adapter.read_setpoint(),
                 "tec_actual_power_w": self.tec_adapter.read_actual_power(),

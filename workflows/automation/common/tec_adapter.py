@@ -52,6 +52,20 @@ class TecPowerAdapter:
             )
         )
 
+    def set_voltage_current(self, voltage_v: float, current_a: float) -> None:
+        if self._controller is None:
+            raise RuntimeError("TEC adapter not connected")
+        self._controller.apply_step(
+            CalibrationStep(
+                name="unified_step_voltage_current",
+                power=0.0,
+                dwell_seconds=1,
+                set_voltage=float(voltage_v),
+                set_current=float(current_a),
+                enable_output=bool(voltage_v != 0.0 or current_a != 0.0),
+            )
+        )
+
     def read_actual_power(self) -> Any:
         if self._session is None:
             return None
