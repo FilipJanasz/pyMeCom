@@ -10,6 +10,10 @@ from pathlib import Path
 from tkinter import BOTH, END, LEFT, RIGHT, VERTICAL, Button, Checkbutton, Entry, Frame, IntVar, Label, Listbox, Scrollbar, StringVar, Tk, filedialog, messagebox
 
 from workflows.automation.common.live_logger import CalibrationStep, LiveLogger, LiveLoggerConfig, PowerScheduleStep, SafeChannelController, default_live_parameters
+from workflows.automation.common.run_config import RunConfig
+from workflows.automation.common.run_engine import DualDeviceRunEngine, LegacyPowerPolicy
+from workflows.automation.common.tec_adapter import TecPowerAdapter
+from workflows.automation.huber.adapter import HuberWorkflowAdapter
 
 try:
     import matplotlib.dates as mdates
@@ -28,7 +32,7 @@ MIN_HZ = 0.1
 class LiveLoggerGui:
     def __init__(self, root: Tk):
         self.root = root
-        self.root.title('Live Logger GUI (COM only)')
+        self.root.title('Live Logger GUI (TEC + Unified)')
 
         self.config_path = StringVar(value='')
         self.serial_port = StringVar(value='')
@@ -40,6 +44,10 @@ class LiveLoggerGui:
         self.duration = StringVar(value='')
         self.output_directory = StringVar(value='live_logs')
         self.output_prefix = StringVar(value='power_live_log_com')
+        self.huber_port = StringVar(value='')
+        self.bath_standby_temp_c = StringVar(value='25.0')
+        self.pump_safe_on = IntVar(value=1)
+        self.run_mode = StringVar(value='TEC-only')
         self.show_requested_line = IntVar(value=1)
         self.show_live_line = IntVar(value=1)
         self.enable_second_plot = IntVar(value=0)
@@ -54,6 +62,7 @@ class LiveLoggerGui:
         self.loaded_power_schedule = []
         self.animating = False
         self.stop_requested = False
+        self.unified_engine: DualDeviceRunEngine | None = None
         self.status_text = StringVar(value='Controller status: unknown')
         self.status_indicator_text = StringVar(value='●')
         self.sample_rate_text = StringVar(value='Measured acquisition rate: n/a')
@@ -98,11 +107,18 @@ class LiveLoggerGui:
         Entry(io_frame, textvariable=self.output_directory, width=42).grid(row=3, column=1, columnspan=4, sticky='we')
         Label(io_frame, text='Output Prefix').grid(row=4, column=0, sticky='w')
         Entry(io_frame, textvariable=self.output_prefix, width=42).grid(row=4, column=1, columnspan=4, sticky='we')
+        Label(io_frame, text='Huber Port (Unified)').grid(row=5, column=0, sticky='w')
+        Entry(io_frame, textvariable=self.huber_port, width=42).grid(row=5, column=1, columnspan=4, sticky='we')
+        Label(io_frame, text='Bath Standby °C').grid(row=6, column=0, sticky='w')
+        Entry(io_frame, textvariable=self.bath_standby_temp_c, width=16).grid(row=6, column=1, sticky='w')
+        Checkbutton(io_frame, text='Pump ON in safe state', variable=self.pump_safe_on).grid(row=6, column=2, columnspan=2, sticky='w')
 
         self.status_indicator_label = Label(top, textvariable=self.status_indicator_text, fg='goldenrod', font=('TkDefaultFont', 12, 'bold'))
         self.status_indicator_label.grid(row=1, column=0, sticky='w', pady=(6, 0))
         Label(top, textvariable=self.status_text).grid(row=1, column=0, columnspan=2, sticky='w', padx=(18, 0), pady=(6, 0))
         Label(top, textvariable=self.sample_rate_text).grid(row=2, column=0, columnspan=2, sticky='w')
+        Label(top, text='Run mode:').grid(row=3, column=0, sticky='w')
+        Label(top, textvariable=self.run_mode, font=('TkDefaultFont', 9, 'bold')).grid(row=3, column=0, sticky='w', padx=(70, 0))
         conn_frame.grid_columnconfigure(1, weight=1)
         io_frame.grid_columnconfigure(1, weight=1)
 
@@ -133,7 +149,7 @@ class LiveLoggerGui:
         self.plot_frame = Frame(right_col)
         self.plot_frame.pack(fill=BOTH, expand=True)
         self.request_plot_frame = Frame(io_frame)
-        self.request_plot_frame.grid(row=6, column=0, columnspan=5, sticky='nsew', pady=(8, 0))
+        self.request_plot_frame.grid(row=7, column=0, columnspan=5, sticky='nsew', pady=(8, 0))
         self.canvas = None
         self.figure = None
         self.axis = None
@@ -158,7 +174,7 @@ class LiveLoggerGui:
             self.request_axis.grid(True, which='major', linestyle='--', alpha=0.6)
             self.canvas.draw_idle()
             self.request_canvas.draw_idle()
-        Checkbutton(io_frame, text='Show requested input line', variable=self.show_requested_line, command=self._redraw_requested_input_plot).grid(row=5, column=0, columnspan=2, sticky='w')
+        Checkbutton(io_frame, text='Show requested input line', variable=self.show_requested_line, command=self._redraw_requested_input_plot).grid(row=8, column=0, columnspan=2, sticky='w')
         Checkbutton(right_col, text='Show live line (default on)', variable=self.show_live_line, command=self._redraw_plot).pack(anchor='w')
         Checkbutton(right_col, text='Enable second live plot (defaults to diff voltage 1/2)', variable=self.enable_second_plot, command=self._redraw_plot).pack(anchor='w')
 
@@ -193,16 +209,25 @@ class LiveLoggerGui:
         path_text = self.config_path.get().strip()
         if not path_text:
             return
-        cfg = LiveLoggerConfig.from_json_file(path_text)
-        self.serial_port.set(cfg.serial_port or '')
-        self.serial_autodetect.set(1 if cfg.serial_port_autodetect else 0)
-        self.serial_hint.set(cfg.serial_port_hint or '')
-        self.address.set(str(cfg.address))
-        self.channel.set(str(cfg.channel))
-        self.duration.set('' if cfg.duration_seconds is None else str(cfg.duration_seconds))
-        self.hz.set(str(cfg.acquisition_hz))
-        self.output_directory.set(cfg.output_directory)
-        self.output_prefix.set(cfg.output_prefix)
+        content = json.loads(Path(path_text).read_text(encoding='utf-8'))
+        if "steps" in content:
+            rcfg = RunConfig.from_dict(content)
+            self.run_mode.set('Unified')
+            self.duration.set(str(sum(step.duration_s for step in rcfg.steps)))
+            self.bath_standby_temp_c.set(str(rcfg.safety.bath_standby_setpoint_c))
+            self.pump_safe_on.set(1 if rcfg.safety.pump_on_in_safe_state else 0)
+        else:
+            cfg = LiveLoggerConfig.from_json_file(path_text)
+            self.run_mode.set('TEC-only')
+            self.serial_port.set(cfg.serial_port or '')
+            self.serial_autodetect.set(1 if cfg.serial_port_autodetect else 0)
+            self.serial_hint.set(cfg.serial_port_hint or '')
+            self.address.set(str(cfg.address))
+            self.channel.set(str(cfg.channel))
+            self.duration.set('' if cfg.duration_seconds is None else str(cfg.duration_seconds))
+            self.hz.set(str(cfg.acquisition_hz))
+            self.output_directory.set(cfg.output_directory)
+            self.output_prefix.set(cfg.output_prefix)
         self._load_requested_input_from_config(path_text)
         self._remember_last_config_path(path_text)
 
@@ -213,14 +238,25 @@ class LiveLoggerGui:
         try:
             content = json.loads(Path(path_text).read_text(encoding='utf-8'))
             schedule = content.get('power_schedule', [])
+            unified_steps = content.get('steps', [])
             self.loaded_power_schedule = list(schedule)
             t = 0.0
-            for step in schedule:
-                duration = float(step.get('duration_seconds', 0.0) or 0.0)
-                set_voltage = float(step.get('set_voltage', 0.0) or 0.0)
-                self.loaded_schedule_points.append((t, set_voltage))
-                t += duration
-                self.loaded_schedule_points.append((t, set_voltage))
+            if unified_steps:
+                self.run_mode.set('Unified')
+                for step in unified_steps:
+                    duration = float(step.get('duration_s', 0.0) or 0.0)
+                    tec_power = float(step.get('tec_power_w', 0.0) or 0.0)
+                    self.loaded_schedule_points.append((t, tec_power))
+                    t += duration
+                    self.loaded_schedule_points.append((t, tec_power))
+            else:
+                self.run_mode.set('TEC-only')
+                for step in schedule:
+                    duration = float(step.get('duration_seconds', 0.0) or 0.0)
+                    set_voltage = float(step.get('set_voltage', 0.0) or 0.0)
+                    self.loaded_schedule_points.append((t, set_voltage))
+                    t += duration
+                    self.loaded_schedule_points.append((t, set_voltage))
             total_duration = t
         except Exception:
             self.loaded_schedule_points = []
@@ -301,6 +337,15 @@ class LiveLoggerGui:
         if hz < MIN_HZ:
             messagebox.showerror('Invalid Hz', f'Acquisition rate must be greater than or equal to {MIN_HZ:g} Hz for TEC polling.')
             return
+        path_text = self.config_path.get().strip()
+        if path_text:
+            try:
+                content = json.loads(Path(path_text).read_text(encoding='utf-8'))
+            except Exception:
+                content = {}
+            if "steps" in content:
+                self._start_unified_run(path_text, hz)
+                return
         cfg = self._build_config()
         self._set_controller_status('yellow', 'Controller status: connecting (starting logger)')
         self.columns_list.delete(0, END)
@@ -370,6 +415,54 @@ class LiveLoggerGui:
                 if self.stop_requested:
                     self.root.after(0, lambda: self._set_controller_status('yellow', 'Controller status: stopped by user'))
 
+        self.run_thread = threading.Thread(target=worker, daemon=True)
+        self.run_thread.start()
+
+    def _start_unified_run(self, path_text: str, hz: float) -> None:
+        self.run_mode.set('Unified')
+        self.stop_requested = False
+        self.animating = True
+        self._schedule_plot_refresh()
+        run_cfg = RunConfig.from_json_file(path_text)
+        run_cfg.safety.bath_standby_setpoint_c = float(self.bath_standby_temp_c.get())
+        run_cfg.safety.pump_on_in_safe_state = bool(self.pump_safe_on.get())
+        tec_cfg = self._build_config()
+        tec_adapter = TecPowerAdapter(tec_cfg)
+        bath_adapter = HuberWorkflowAdapter(port=self.huber_port.get().strip() or None)
+        engine = DualDeviceRunEngine(tec_adapter, bath_adapter, output_directory=self.output_directory.get().strip() or 'live_logs', sample_hz=hz)
+        self.unified_engine = engine
+
+        def on_event(evt: dict[str, object]) -> None:
+            state = str(evt.get("next_state") or evt.get("state") or "")
+            self.root.after(0, lambda s=state: self.status_text.set(f'Engine state: {s}'))
+            if evt.get("event") == "state_transition" and evt.get("next_state") == "ERROR":
+                self.root.after(0, lambda: self._set_controller_status('red', f'Controller status: error ({evt.get("error", "unknown")})'))
+
+        def on_row(row: dict[str, object]) -> None:
+            t = row.get('OLE Automation Date')
+            if isinstance(t, (float, int)):
+                unix_ts = (float(t) - 25569.0) * 86400.0
+                self.sample_index.append(unix_ts)
+            else:
+                self.sample_index.append(datetime.now(timezone.utc).timestamp())
+            for k, v in row.items():
+                try:
+                    fv = float(v)
+                except Exception:
+                    continue
+                self.live_data.setdefault(k, deque(maxlen=MAX_POINTS)).append(fv)
+
+        def worker() -> None:
+            try:
+                self._set_controller_status('yellow', 'Controller status: connecting (unified run)')
+                paths = engine.run(run_cfg, legacy_power_policy=LegacyPowerPolicy.ALLOW_ZERO_POWER.value, event_callback=on_event, row_callback=on_row)
+                self.root.after(0, lambda p=paths.csv_path.name: self._set_controller_status('green', f'Controller status: unified run complete ({p})'))
+            except Exception as exc:
+                self.root.after(0, lambda: self._set_controller_status('red', f'Controller status: unified run failed ({exc})'))
+                self.root.after(0, lambda: messagebox.showerror('Unified run failed', str(exc)))
+            finally:
+                self.animating = False
+                self.unified_engine = None
         self.run_thread = threading.Thread(target=worker, daemon=True)
         self.run_thread.start()
 
@@ -456,6 +549,8 @@ class LiveLoggerGui:
 
     def force_stop(self) -> None:
         self.stop_requested = True
+        if self.unified_engine is not None:
+            self.unified_engine.request_stop()
 
     def clear_plot(self) -> None:
         self.sample_index.clear()
