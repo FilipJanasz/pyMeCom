@@ -48,6 +48,10 @@ class LiveLoggerGui:
         self.bath_standby_temp_c = StringVar(value='25.0')
         self.pump_safe_on = IntVar(value=1)
         self.run_mode = StringVar(value='TEC-only')
+        self.huber_curve_c = StringVar(value='25,30,35,30,25')
+        self.voltage_curve_v = StringVar(value='0.5,1.0,1.5,1.0,0.5')
+        self.current_curve_a = StringVar(value='0.2,0.2,0.25,0.2,0.2')
+        self.step_duration_s = StringVar(value='60')
         self.show_requested_line = IntVar(value=1)
         self.show_live_line = IntVar(value=1)
         self.enable_second_plot = IntVar(value=0)
@@ -59,6 +63,7 @@ class LiveLoggerGui:
         self.selected_cols: list[str] = []
         self.second_plot_cols: list[str] = []
         self.loaded_schedule_points: list[tuple[float, float]] = []
+        self.loaded_temp_schedule_points: list[tuple[float, float]] = []
         self.loaded_power_schedule = []
         self.animating = False
         self.stop_requested = False
@@ -94,6 +99,7 @@ class LiveLoggerGui:
         Button(io_frame, text='Browse', command=self.browse_config).grid(row=2, column=1, sticky='w')
         Button(io_frame, text='Load JSON', command=self.load_config).grid(row=2, column=2, sticky='w')
         Button(io_frame, text='Save JSON', command=self.save_config).grid(row=2, column=3, sticky='w')
+        Button(io_frame, text='Build Unified Example', command=self.save_unified_example_config).grid(row=2, column=4, sticky='w')
 
         add_row('Serial Port', self.serial_port, 1)
         Checkbutton(conn_frame, text='Serial autodetect', variable=self.serial_autodetect).grid(row=1, column=2, sticky='w')
@@ -112,6 +118,14 @@ class LiveLoggerGui:
         Label(io_frame, text='Bath Standby °C').grid(row=6, column=0, sticky='w')
         Entry(io_frame, textvariable=self.bath_standby_temp_c, width=16).grid(row=6, column=1, sticky='w')
         Checkbutton(io_frame, text='Pump ON in safe state', variable=self.pump_safe_on).grid(row=6, column=2, columnspan=2, sticky='w')
+        Label(io_frame, text='Huber Temp Curve °C (comma-separated)').grid(row=7, column=0, sticky='w')
+        Entry(io_frame, textvariable=self.huber_curve_c, width=42).grid(row=7, column=1, columnspan=4, sticky='we')
+        Label(io_frame, text='TEC Voltage Curve V (comma-separated)').grid(row=8, column=0, sticky='w')
+        Entry(io_frame, textvariable=self.voltage_curve_v, width=42).grid(row=8, column=1, columnspan=4, sticky='we')
+        Label(io_frame, text='TEC Current Curve A (comma-separated)').grid(row=9, column=0, sticky='w')
+        Entry(io_frame, textvariable=self.current_curve_a, width=42).grid(row=9, column=1, columnspan=4, sticky='we')
+        Label(io_frame, text='Step Duration Seconds').grid(row=10, column=0, sticky='w')
+        Entry(io_frame, textvariable=self.step_duration_s, width=16).grid(row=10, column=1, sticky='w')
 
         self.status_indicator_label = Label(top, textvariable=self.status_indicator_text, fg='goldenrod', font=('TkDefaultFont', 12, 'bold'))
         self.status_indicator_label.grid(row=1, column=0, sticky='w', pady=(6, 0))
@@ -149,7 +163,7 @@ class LiveLoggerGui:
         self.plot_frame = Frame(right_col)
         self.plot_frame.pack(fill=BOTH, expand=True)
         self.request_plot_frame = Frame(io_frame)
-        self.request_plot_frame.grid(row=7, column=0, columnspan=5, sticky='nsew', pady=(8, 0))
+        self.request_plot_frame.grid(row=11, column=0, columnspan=5, sticky='nsew', pady=(8, 0))
         self.canvas = None
         self.figure = None
         self.axis = None
@@ -170,11 +184,11 @@ class LiveLoggerGui:
             self.request_canvas.get_tk_widget().pack(fill=BOTH, expand=True)
             self.request_axis.set_title('Requested input from loaded JSON')
             self.request_axis.set_xlabel('Seconds')
-            self.request_axis.set_ylabel('Set voltage')
+            self.request_axis.set_ylabel('Requested value')
             self.request_axis.grid(True, which='major', linestyle='--', alpha=0.6)
             self.canvas.draw_idle()
             self.request_canvas.draw_idle()
-        Checkbutton(io_frame, text='Show requested input line', variable=self.show_requested_line, command=self._redraw_requested_input_plot).grid(row=8, column=0, columnspan=2, sticky='w')
+        Checkbutton(io_frame, text='Show requested input line', variable=self.show_requested_line, command=self._redraw_requested_input_plot).grid(row=12, column=0, columnspan=2, sticky='w')
         Checkbutton(right_col, text='Show live line (default on)', variable=self.show_live_line, command=self._redraw_plot).pack(anchor='w')
         Checkbutton(right_col, text='Enable second live plot (defaults to diff voltage 1/2)', variable=self.enable_second_plot, command=self._redraw_plot).pack(anchor='w')
 
@@ -233,6 +247,7 @@ class LiveLoggerGui:
 
     def _load_requested_input_from_config(self, path_text: str) -> None:
         self.loaded_schedule_points = []
+        self.loaded_temp_schedule_points = []
         self.loaded_power_schedule = []
         total_duration = 0.0
         try:
@@ -246,9 +261,12 @@ class LiveLoggerGui:
                 for step in unified_steps:
                     duration = float(step.get('duration_s', 0.0) or 0.0)
                     tec_power = float(step.get('tec_power_w', 0.0) or 0.0)
+                    bath_temp = float(step.get('bath_setpoint_c', 25.0) or 25.0)
                     self.loaded_schedule_points.append((t, tec_power))
+                    self.loaded_temp_schedule_points.append((t, bath_temp))
                     t += duration
                     self.loaded_schedule_points.append((t, tec_power))
+                    self.loaded_temp_schedule_points.append((t, bath_temp))
             else:
                 self.run_mode.set('TEC-only')
                 for step in schedule:
@@ -260,10 +278,62 @@ class LiveLoggerGui:
             total_duration = t
         except Exception:
             self.loaded_schedule_points = []
+            self.loaded_temp_schedule_points = []
             total_duration = 0.0
         if total_duration > 0.0:
             self.duration.set(f'{total_duration:g}')
         self._redraw_requested_input_plot()
+
+    def _parse_curve_values(self, text: str, name: str) -> list[float]:
+        parts = [p.strip() for p in text.split(',') if p.strip()]
+        if not parts:
+            raise ValueError(f'{name} is empty')
+        return [float(p) for p in parts]
+
+    def save_unified_example_config(self) -> None:
+        path_text = self.config_path.get().strip() or filedialog.asksaveasfilename(defaultextension='.json', filetypes=[('JSON files', '*.json')])
+        if not path_text:
+            return
+        self.config_path.set(path_text)
+        try:
+            temps = self._parse_curve_values(self.huber_curve_c.get(), 'Huber temperature curve')
+            volts = self._parse_curve_values(self.voltage_curve_v.get(), 'TEC voltage curve')
+            currents = self._parse_curve_values(self.current_curve_a.get(), 'TEC current curve')
+            if len(temps) != len(volts) or len(temps) != len(currents):
+                raise ValueError('Huber temperature, TEC voltage, and TEC current curves must have the same number of points')
+            step_duration = float(self.step_duration_s.get())
+            if step_duration <= 0:
+                raise ValueError('Step duration must be > 0')
+        except ValueError as exc:
+            messagebox.showerror('Invalid curve input', str(exc))
+            return
+        steps = []
+        for idx, (temp_c, volt_v, current_a) in enumerate(zip(temps, volts, currents), start=1):
+            steps.append(
+                {
+                    'name': f'curve_step_{idx}',
+                    'bath_setpoint_c': temp_c,
+                    'tec_power_w': 0.0,
+                    'duration_s': step_duration,
+                    'progression_mode': 'time',
+                    'tec_voltage_v': volt_v,
+                    'tec_current_a': current_a,
+                }
+            )
+        payload = {
+            'run_name': 'gui_unified_curve_example',
+            'steps': steps,
+            'safety': {
+                'tec_power_w_on_stop': 0.0,
+                'bath_standby_setpoint_c': float(self.bath_standby_temp_c.get()),
+                'pump_on_in_safe_state': bool(self.pump_safe_on.get()),
+            },
+        }
+        with open(path_text, 'w', encoding='utf-8') as handle:
+            json.dump(payload, handle, indent=2)
+            handle.write('\n')
+        self._load_requested_input_from_config(path_text)
+        self._remember_last_config_path(path_text)
 
     def save_config(self) -> None:
         path_text = self.config_path.get().strip() or filedialog.asksaveasfilename(defaultextension='.json', filetypes=[('JSON files', '*.json')])
@@ -515,14 +585,19 @@ class LiveLoggerGui:
             x_vals = [x for x, _ in self.loaded_schedule_points]
             y_vals = [y for _, y in self.loaded_schedule_points]
             if self.show_requested_line.get():
-                self.request_axis.plot(x_vals, y_vals, color='tab:orange', linewidth=1.2, marker='o', markersize=2.5)
+                self.request_axis.plot(x_vals, y_vals, color='tab:orange', linewidth=1.2, marker='o', markersize=2.5, label='TEC requested')
+                if getattr(self, 'loaded_temp_schedule_points', None):
+                    tx = [x for x, _ in self.loaded_temp_schedule_points]
+                    ty = [y for _, y in self.loaded_temp_schedule_points]
+                    self.request_axis.plot(tx, ty, color='tab:blue', linewidth=1.2, marker='o', markersize=2.5, label='Huber requested °C')
+                self.request_axis.legend(loc='best')
                 self.request_axis.set_title('Requested input from loaded JSON')
             else:
                 self.request_axis.set_title('Requested input hidden (enabled by checkbox)')
         else:
             self.request_axis.set_title('Requested input from loaded JSON (no power_schedule)')
         self.request_axis.set_xlabel('Seconds')
-        self.request_axis.set_ylabel('Set voltage')
+        self.request_axis.set_ylabel('TEC power / Huber °C')
         self.request_axis.grid(True, which='major', linestyle='--', alpha=0.6)
         self.request_canvas.draw_idle()
 

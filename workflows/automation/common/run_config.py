@@ -16,6 +16,8 @@ class UnifiedStep:
     bath_setpoint_c: float
     tec_power_w: float
     duration_s: float
+    tec_voltage_v: Optional[float] = None
+    tec_current_a: Optional[float] = None
     progression_mode: ProgressionMode = "time"
     stability_band_c: Optional[float] = None
     stability_hold_s: Optional[float] = None
@@ -39,6 +41,8 @@ class UnifiedStep:
             name=str(data["name"]),
             bath_setpoint_c=float(data["bath_setpoint_c"]),
             tec_power_w=float(data["tec_power_w"]),
+            tec_voltage_v=_optional_float(data.get("tec_voltage_v")),
+            tec_current_a=_optional_float(data.get("tec_current_a")),
             duration_s=float(data["duration_s"]),
             progression_mode=progression_mode,
             stability_band_c=_optional_float(data.get("stability_band_c")),
@@ -54,6 +58,10 @@ class UnifiedStep:
             raise ValueError(f"Unified step {step_index} has an empty name")
         if not math.isfinite(self.duration_s) or self.duration_s <= 0.0:
             raise ValueError(f"Unified step {step_index} duration_s must be finite and > 0")
+        if self.tec_voltage_v is not None and not math.isfinite(self.tec_voltage_v):
+            raise ValueError(f"Unified step {step_index} tec_voltage_v must be finite when provided")
+        if self.tec_current_a is not None and not math.isfinite(self.tec_current_a):
+            raise ValueError(f"Unified step {step_index} tec_current_a must be finite when provided")
         if self.progression_mode == "stability":
             if self.stability_band_c is not None and (not math.isfinite(self.stability_band_c) or self.stability_band_c <= 0.0):
                 raise ValueError(f"Unified step {step_index} stability_band_c must be finite and > 0 when provided")

@@ -119,6 +119,13 @@ python power_live_log_gui.py
 Expected:
 - GUI opens without import/runtime errors.
 - Live plotting area appears when `matplotlib` is installed.
+- In the **Config & Output** section, the GUI shows editable fields for:
+  - `Huber Temp Curve °C (comma-separated)`,
+  - `TEC Voltage Curve V (comma-separated)`,
+  - `TEC Current Curve A (comma-separated)`,
+  - `Step Duration Seconds`,
+  and a **Build Unified Example** button that writes a unified JSON with both curves.
+- Requested-input preview shows both TEC-requested values and Huber requested temperature when loading unified JSON.
 
 ### 2) Verify TEC-only mode (legacy flow preserved)
 
