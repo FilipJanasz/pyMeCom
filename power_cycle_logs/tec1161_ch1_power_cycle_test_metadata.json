@@ -1,0 +1,91 @@
+{
+  "address": 2,
+  "baudrate": 57600,
+  "channel": 1,
+  "created_at": "2026-05-04T06:50:52.990377+00:00",
+  "device_label": "TEC1161",
+  "disable_output_value": 0,
+  "dwell_seconds_default": 5,
+  "enable_output_value": 1,
+  "low_resolution_temperature_parameters": [
+    {
+      "description": null,
+      "instance": null,
+      "key": "object_temperature",
+      "parameter_format": null,
+      "parameter_id": null,
+      "parameter_name": "Object Temperature",
+      "required": false
+    },
+    {
+      "description": null,
+      "instance": null,
+      "key": "sink_temperature",
+      "parameter_format": null,
+      "parameter_id": null,
+      "parameter_name": "Sink Temperature",
+      "required": false
+    }
+  ],
+  "measurement_parameters": [],
+  "notes": [
+    "Named MeCom parameters are used where already available in mecom/commands.py.",
+    "TEC1161-specific high-resolution ADC and low-resolution temperature channels can be configured via raw parameter IDs and formats.",
+    "The repository PDFs mention ADC configuration/calibration details, but the exact TEC1161 HR/low-resolution parameter IDs should be confirmed on the target hardware or protocol table before unattended production use."
+  ],
+  "output_setpoint_parameters": {},
+  "output_stage_input_selection": null,
+  "raw_parameter_placeholders": [],
+  "serial_port": "COM3",
+  "settle_seconds": 1.0,
+  "steps": [
+    {
+      "dwell_seconds": 5,
+      "enable_output": true,
+      "metadata": {
+        "purpose": "Confirm a zero-output baseline before the loop starts"
+      },
+      "name": "zero_baseline",
+      "power": 0.0,
+      "set_current": 0.0,
+      "set_voltage": 0.0
+    },
+    {
+      "dwell_seconds": 5,
+      "enable_output": true,
+      "metadata": {},
+      "name": "power_25pct",
+      "power": 0.25,
+      "set_current": 0.25,
+      "set_voltage": 1.0
+    },
+    {
+      "dwell_seconds": 5,
+      "enable_output": true,
+      "metadata": {},
+      "name": "power_50pct",
+      "power": 0.5,
+      "set_current": 0.5,
+      "set_voltage": 2.0
+    },
+    {
+      "dwell_seconds": 5,
+      "enable_output": true,
+      "metadata": {},
+      "name": "power_75pct",
+      "power": 0.75,
+      "set_current": 0.75,
+      "set_voltage": 3.0
+    },
+    {
+      "dwell_seconds": 5,
+      "enable_output": true,
+      "metadata": {},
+      "name": "power_100pct",
+      "power": 1.0,
+      "set_current": 1.0,
+      "set_voltage": 4.0
+    }
+  ],
+  "timeout": 2.0
+}
