@@ -104,3 +104,91 @@ Explicit mapping behavior:
 This allows incremental migration while keeping existing TEC-only configs usable for schema parsing.
 
 See `examples/unified_run_config.example.json` for a unified example.
+
+
+## Stage 4 manual verification checklist (GUI integration)
+
+Use this checklist to manually validate the single-operator GUI workflow while keeping TEC-only behavior intact.
+
+### 1) Launch GUI on Windows-compatible Python
+
+```bash
+python power_live_log_gui.py
+```
+
+Expected:
+- GUI opens without import/runtime errors.
+- Live plotting area appears when `matplotlib` is installed.
+
+### 2) Verify TEC-only mode (legacy flow preserved)
+
+1. Load a legacy TEC JSON containing `power_schedule` (for example `examples/power_live_log_com.example.json`).
+2. Confirm preview reflects TEC schedule intent.
+3. Start run, observe live telemetry and status updates.
+4. Stop run with **Force Stop**.
+
+Expected:
+- Run starts and logs as before.
+- Controller status updates are user-visible (connecting/running/stopped/error).
+- Output files are created in selected output directory.
+
+### 3) Verify Unified mode end-to-end
+
+1. Load unified JSON (for example `examples/unified_run_config.example.json`).
+2. Confirm step preview shows bath + TEC setpoints and durations.
+3. Set safety values before start:
+   - bath standby temperature,
+   - pump safe state.
+4. Start unified run.
+5. Observe run mode indicator (**Unified**), engine state, and any errors in GUI.
+6. Stop run mid-step and repeat with a full completion run.
+
+Expected:
+- Explicit run mode indicator is visible (`TEC-only` vs `Unified`).
+- Engine state transitions are visible in GUI status.
+- On stop/error, safety actions are applied and visible in logs/status.
+- Bath telemetry fields (temperature/setpoint/pump state when available) appear in status/plots.
+
+### 4) Error handling checks
+
+Run these negative tests and verify clear user-facing messages:
+
+- Bad JSON (syntax error).
+- Missing required step fields.
+- Invalid COM/connection parameters.
+- Unsupported bath pump command path.
+
+Expected:
+- Dialog/status clearly describes what failed and what operator should check next.
+- Run does not silently fail.
+
+### 5) Log validation
+
+After each test run, inspect generated files:
+
+- `run_timeline_*.csv`
+- `run_timeline_*.metadata.json`
+
+Expected:
+- Unified timeline rows contain both TEC and bath columns when unified mode is active.
+- Metadata records safety config, events, and final engine state.
+
+### 6) Minimal smoke automation (recommended)
+
+From repo root:
+
+```bash
+pytest -q tests/test_run_config.py tests/test_run_engine.py
+```
+
+If GUI smoke tests exist, run them too (headless where practical).
+
+---
+
+If any step fails, capture:
+- config used,
+- exact timestamp,
+- GUI status text,
+- metadata `events[]` excerpt.
+
+This makes integration issues reproducible across Windows test benches.
