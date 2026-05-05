@@ -15,6 +15,7 @@ class FakeTecAdapter:
         self.closed = False
         self.fail_on_set_power = False
         self.legacy_calls = 0
+        self.calls = []
 
     def connect(self):
         self.connected = True
@@ -24,6 +25,10 @@ class FakeTecAdapter:
         if self.fail_on_set_power:
             raise RuntimeError("set_power failed")
         self.power = power_w
+        self.calls.append(("set_power", power_w))
+
+    def set_voltage_current(self, voltage_v, current_a):
+        self.calls.append(("set_voltage_current", voltage_v, current_a))
 
     def apply_legacy_step(self, step):
         self.legacy_calls += 1
@@ -141,3 +146,16 @@ def test_legacy_voltage_mode_executes_compatibility_path(tmp_path: Path):
     engine = DualDeviceRunEngine(tec, FakeBathAdapter(), tmp_path, sample_hz=30)
     engine.run(cfg, input_origin="legacy_power_schedule", legacy_power_policy="legacy_voltage_mode")
     assert tec.legacy_calls >= 1
+
+
+def test_unified_zero_power_clears_voltage_current_then_disables_output(tmp_path: Path):
+    cfg = RunConfig.from_dict(
+        {"steps": [{"name": "zero", "bath_setpoint_c": 25.0, "tec_power_w": 0.0, "duration_s": 0.05}]}
+    )
+    tec = FakeTecAdapter()
+    engine = DualDeviceRunEngine(tec, FakeBathAdapter(), tmp_path, sample_hz=30)
+    engine.run(cfg)
+
+    assert ("set_voltage_current", 0.0, 0.0) in tec.calls
+    assert ("set_power", 0.0) in tec.calls
+    assert tec.calls.index(("set_voltage_current", 0.0, 0.0)) < tec.calls.index(("set_power", 0.0))
