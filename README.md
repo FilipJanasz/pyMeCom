@@ -125,7 +125,7 @@ Expected:
   - `TEC Current Curve A (comma-separated)`,
   - `Step Duration Seconds`,
   and a **Build Unified Example** button that writes a unified JSON with both curves.
-- Requested-input preview shows both TEC-requested values and Huber requested temperature when loading unified JSON.
+- Requested-input preview uses separate subplots for TEC requested power and Huber requested temperature, gracefully handles JSONs that only include one request type, and unified runs will skip connecting to devices with no requested setpoints in the loaded JSON.
 
 ### 2) Verify TEC-only mode (legacy flow preserved)
 
