@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widgets import Static, Input, Label, RichLog, Checkbox, Button
@@ -10,20 +10,6 @@ from typing import Optional
 import csv
 import os
 from pathlib import Path
-import serial
-
-try:
-    from huber_thermostat import (
-        HuberThermostatI,
-        HuberThermostatTools,
-        TemperatureVar,
-        HUBER_DEFAULT_BAUDRATE,
-        HUBER_DEFAULT_TIMEOUT,
-    )
-    HUBER_AVAILABLE = True
-except ImportError:
-    HUBER_AVAILABLE = False
-    print("Warning: huber_thermostat not available, using simulation mode")
 
 try:
     import matplotlib
@@ -36,74 +22,7 @@ except ImportError:
     print("Warning: matplotlib not available, plotting disabled")
 
 
-class ThermostatConnection:
-    def __init__(self, port: str = None, debug: bool = False):
-        self.port = port
-        self.debug = debug
-        self.serial_conn = None
-        self.thermostat = None
-        self._mock_temp = 20.0
-        self._mock_setpoint = 25.0
-        
-    def connect(self) -> bool:
-        if not HUBER_AVAILABLE:
-            return True
-            
-        try:
-            if not self.port:
-                self.port = HuberThermostatTools.auto_detect_huber_port(debug=self.debug)
-            if not self.port:
-                return False
-                
-            self.serial_conn = serial.Serial(
-                self.port,
-                baudrate=HUBER_DEFAULT_BAUDRATE,
-                timeout=HUBER_DEFAULT_TIMEOUT
-            )
-            self.thermostat = HuberThermostatI(self.serial_conn, debug=self.debug)
-            return self.thermostat.ping()
-        except Exception as e:
-            print(f"Connection error: {e}")
-            return False
-    
-    def read_temperature(self) -> Optional[float]:
-        if not HUBER_AVAILABLE or not self.thermostat:
-            self._mock_temp += (self._mock_setpoint - self._mock_temp) * 0.05
-            return round(self._mock_temp, 2)
-        try:
-            return self.thermostat.read_bath_temperature()
-        except Exception:
-            return None
-    
-    def read_setpoint(self) -> Optional[float]:
-        if not HUBER_AVAILABLE or not self.thermostat:
-            return self._mock_setpoint
-        try:
-            return self.thermostat.read_setpoint()
-        except Exception:
-            return None
-    
-    def set_setpoint(self, value: float) -> bool:
-        if not HUBER_AVAILABLE or not self.thermostat:
-            self._mock_setpoint = value
-            return True
-        try:
-            return self.thermostat.set_setpoint(value)
-        except Exception:
-            return False
-    
-    def set_thermoregulation(self, state: bool) -> bool:
-        if not HUBER_AVAILABLE or not self.thermostat:
-            return True
-        try:
-            return self.thermostat.set_thermoregulation(state)
-        except Exception:
-            return False
-    
-    def close(self):
-        if self.serial_conn:
-            self.serial_conn.close()
-
+from huber_adapter import ThermostatConnection
 
 class TemperaturePanel(Static):
     temperature = reactive("–.– °C")

@@ -166,7 +166,12 @@ def recv(interface):
 		error_description = "invalid response size: expected = {expected}, actual = {actual}".format(expected=PB_SIZE, actual=len(command))
 		raise InterfaceException(error_description)
 
-	return command.decompose()
+	try:
+		decoded = command.decode("ascii")
+	except UnicodeDecodeError as exc:
+		raise FormatException from exc
+
+	return decompose(decoded)
 
 def read(interface, addr):
 	assert type(interface) is Serial
@@ -186,6 +191,6 @@ def write(interface, addr, value):
 	command = Command(addr, value)
 	send(interface, command)
 
-	response = recv()
+	response = recv(interface)
 	if response.addr != addr or response.value != value:
 		raise ResponseException
