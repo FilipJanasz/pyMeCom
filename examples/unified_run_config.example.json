@@ -1,0 +1,27 @@
+{
+  "run_name": "tec_huber_mvp_demo",
+  "steps": [
+    {
+      "name": "preheat",
+      "bath_setpoint_c": 30.0,
+      "tec_power_w": 5.0,
+      "duration_s": 300,
+      "progression_mode": "time"
+    },
+    {
+      "name": "hold_stable_template",
+      "bath_setpoint_c": 35.0,
+      "tec_power_w": 8.0,
+      "duration_s": 600,
+      "progression_mode": "stability",
+      "stability_band_c": 0.2,
+      "stability_hold_s": 120,
+      "stability_timeout_s": 1800
+    }
+  ],
+  "safety": {
+    "tec_power_w_on_stop": 0.0,
+    "bath_standby_setpoint_c": 25.0,
+    "pump_on_in_safe_state": true
+  }
+}

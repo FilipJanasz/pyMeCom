@@ -53,3 +53,54 @@ This repository is being extended to support a single calibration workflow that 
 ### Huber wrapper capability note
 
 The workflow Huber wrapper (`workflows/automation/huber/`) uses capability checks for optional pump control. When pump control is unavailable in the connected client, pump requests are logged as unsupported instead of attempting protocol-level fallbacks.
+
+## Unified run config schema (Stage 2)
+
+A new JSON model is available under `workflows/automation/common/run_config.py`:
+
+- `RunConfig`
+- `UnifiedStep`
+- `SafetyConfig`
+
+### Unified step fields (MVP)
+
+Each `steps[]` entry supports:
+
+- `name` (string)
+- `bath_setpoint_c` (number)
+- `tec_power_w` (number)
+- `duration_s` (seconds, number > 0)
+- `progression_mode` (`"time"` default, or `"stability"`)
+
+### Phase-2-ready optional stability fields
+
+Available now to avoid schema churn:
+
+- `stability_band_c`
+- `stability_hold_s`
+- `stability_timeout_s`
+
+### Safety block
+
+`RunConfig.safety` supports:
+
+- `tec_power_w_on_stop` (default `0.0`)
+- `bath_standby_setpoint_c` (default `25.0`)
+- `pump_on_in_safe_state` (default `true`)
+
+### Backward compatibility with TEC-only power schedule
+
+The loader accepts legacy TEC `power_schedule` JSON and maps it to unified steps.
+
+Explicit mapping behavior:
+
+- `legacy.name` -> `UnifiedStep.name`
+- `legacy.power` -> `UnifiedStep.tec_power_w`
+- `legacy.duration_seconds` -> `UnifiedStep.duration_s`
+- `UnifiedStep.bath_setpoint_c` defaults to `25.0`
+- `UnifiedStep.progression_mode` defaults to `"time"`
+- `legacy.set_voltage`, `legacy.set_current`, and `legacy.enable_output` are intentionally ignored by Stage 2 schema mapping because `UnifiedStep` is power-driven (`tec_power_w`)
+
+This allows incremental migration while keeping existing TEC-only configs usable for schema parsing.
+
+See `examples/unified_run_config.example.json` for a unified example.
