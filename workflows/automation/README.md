@@ -5,3 +5,5 @@ This workflow separates transport-specific automation artifacts so COM and TCP w
 - `workflows/automation/com`: serial/COM working baseline
 - `workflows/automation/tcp`: TCP migration scaffold
 - `workflows/automation/common`: transport-agnostic shared files
+
+- `workflows/automation/huber`: workflow-level wrapper for Huber control adapter (capability-aware pump handling)
