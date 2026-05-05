@@ -34,6 +34,7 @@ class UnifiedStep:
                 f"Unified step {step_index} has invalid progression_mode={progression_mode!r}; expected 'time' or 'stability'"
             )
 
+        legacy_nonzero_intent = bool(data.get("_legacy_nonzero_intent", False))
         step = cls(
             name=str(data["name"]),
             bath_setpoint_c=float(data["bath_setpoint_c"]),
@@ -45,6 +46,7 @@ class UnifiedStep:
             stability_timeout_s=_optional_float(data.get("stability_timeout_s")),
         )
         step.validate(step_index)
+        setattr(step, "_legacy_nonzero_intent", legacy_nonzero_intent)
         return step
 
     def validate(self, step_index: int) -> None:
@@ -133,6 +135,7 @@ def _map_tec_power_schedule_to_unified_steps(power_schedule: List[Dict[str, Any]
                 "tec_power_w": tec_power_w,
                 "duration_s": duration_s,
                 "progression_mode": "time",
+                "_legacy_nonzero_intent": bool((legacy.get("set_voltage") or 0) != 0 or (legacy.get("set_current") or 0) != 0),
             }
         )
     return mapped
