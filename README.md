@@ -2,6 +2,12 @@
 
 A Python interface for the MeCom protocol by Meerstetter, with workflow tooling for power scheduling and logging.
 
+
+## GUI entry points
+
+- **TEC-only live logger GUI:** run `python power_live_log_tec_gui.py` to use the standalone Meerstetter TEC logger workflow without Huber or unified-run controls. This is the recommended GUI while the unified workflow is being debugged.
+- **Unified TEC + Huber GUI:** run `python power_live_log_gui.py` for the combined bath/TEC scheduler and unified log workflow.
+
 ## New integration direction: TEC + Huber unified calibration app
 
 This repository is being extended to support a single calibration workflow that combines:
@@ -112,12 +118,21 @@ Use this checklist to manually validate the single-operator GUI workflow while k
 
 ### 1) Launch GUI on Windows-compatible Python
 
+For the restored TEC-only workflow, launch:
+
+```bash
+python power_live_log_tec_gui.py
+```
+
+For the unified TEC + Huber workflow, launch:
+
 ```bash
 python power_live_log_gui.py
 ```
 
 Expected:
-- GUI opens without import/runtime errors.
+- The TEC-only GUI opens without Huber/unified controls and accepts legacy TEC live logger JSON files.
+- The unified GUI opens without import/runtime errors.
 - Live plotting area appears when `matplotlib` is installed.
 - In the **Config & Output** section, the GUI shows editable fields for:
   - `Huber Temp Curve °C (comma-separated)`,
