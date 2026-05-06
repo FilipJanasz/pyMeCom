@@ -83,6 +83,64 @@ def default_live_parameters(channel: int = 1) -> List[LiveParameterSpec]:
     ]
 
 
+UNIFIED_STEP_KEYS = {
+    "bath_setpoint_c",
+    "tec_power_w",
+    "duration_s",
+    "progression_mode",
+    "stability_band_c",
+    "stability_hold_s",
+    "stability_timeout_s",
+}
+UNIFIED_SAFETY_KEYS = {"tec_power_w_on_stop", "bath_standby_setpoint_c", "pump_on_in_safe_state"}
+
+
+def looks_like_unified_run_config(content: Dict[str, Any]) -> bool:
+    """Return True only for JSON that has the unified TEC+Huber run shape.
+
+    Older TEC-only calibration files may also have a top-level ``steps`` array, so
+    do not classify a file as unified unless the steps or safety block include
+    fields that belong to the unified TEC+Huber schema.
+    """
+    steps = content.get("steps")
+    if not isinstance(steps, list) or not steps:
+        return False
+    if any(isinstance(step, dict) and (UNIFIED_STEP_KEYS & set(step)) for step in steps):
+        return True
+    safety = content.get("safety")
+    return isinstance(safety, dict) and bool(UNIFIED_SAFETY_KEYS & set(safety))
+
+
+def legacy_tec_steps_to_power_schedule(data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Map older TEC calibration ``steps`` entries into live-logger schedule entries."""
+    raw_steps = data.get("steps")
+    if not isinstance(raw_steps, list):
+        return []
+    default_dwell = data.get("dwell_seconds_default", 0.0)
+    converted: List[Dict[str, Any]] = []
+    for idx, step in enumerate(raw_steps):
+        if not isinstance(step, dict):
+            continue
+        duration = step.get("duration_seconds", step.get("dwell_seconds", default_dwell))
+        converted.append(
+            {
+                "name": str(step.get("name", f"step_{idx + 1}")),
+                "power": float(step.get("power", 0.0) or 0.0),
+                "duration_seconds": float(duration or 0.0),
+                "set_voltage": _optional_float(step.get("set_voltage")),
+                "set_current": _optional_float(step.get("set_current")),
+                "enable_output": bool(step.get("enable_output", True)),
+            }
+        )
+    return converted
+
+
+def _optional_float(value: Any) -> Optional[float]:
+    if value is None:
+        return None
+    return float(value)
+
+
 @dataclass
 class PowerScheduleStep:
     name: str
@@ -94,7 +152,10 @@ class PowerScheduleStep:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "PowerScheduleStep":
-        return cls(**data)
+        valid_keys = set(cls.__dataclass_fields__.keys())
+        filtered = {key: value for key, value in data.items() if key in valid_keys}
+        filtered.setdefault("name", "step")
+        return cls(**filtered)
 
 
 @dataclass
@@ -124,6 +185,10 @@ class LiveLoggerConfig:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "LiveLoggerConfig":
         payload = dict(data)
+        if not payload.get("power_schedule") and not looks_like_unified_run_config(payload):
+            converted_steps = legacy_tec_steps_to_power_schedule(payload)
+            if converted_steps:
+                payload["power_schedule"] = converted_steps
         payload["parameters"] = [LiveParameterSpec.from_dict(item) for item in payload.get("parameters", [])]
         payload["channel_setup_parameters"] = [LiveParameterSpec.from_dict(item) for item in payload.get("channel_setup_parameters", [])]
         payload["power_schedule"] = [PowerScheduleStep.from_dict(item) for item in payload.get("power_schedule", [])]

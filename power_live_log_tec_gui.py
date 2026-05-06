@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from tkinter import BOTH, END, LEFT, RIGHT, VERTICAL, Button, Checkbutton, Entry, Frame, IntVar, Label, Listbox, Scrollbar, StringVar, Tk, filedialog, messagebox
 
-from workflows.automation.common.live_logger import CalibrationStep, LiveLogger, LiveLoggerConfig, PowerScheduleStep, SafeChannelController, default_live_parameters
+from workflows.automation.common.live_logger import CalibrationStep, LiveLogger, LiveLoggerConfig, PowerScheduleStep, SafeChannelController, default_live_parameters, legacy_tec_steps_to_power_schedule, looks_like_unified_run_config
 
 if importlib.util.find_spec('matplotlib') is not None:
     import matplotlib.dates as mdates
@@ -197,8 +197,8 @@ class TecLiveLoggerGui:
         if not path_text:
             return
         content = json.loads(Path(path_text).read_text(encoding='utf-8'))
-        if isinstance(content.get('steps'), list) and content['steps']:
-            messagebox.showerror('Unified JSON selected', 'This is the TEC-only GUI. Open unified JSON files with power_live_log_gui.py.')
+        if looks_like_unified_run_config(content):
+            messagebox.showerror('Unified JSON selected', 'This is the TEC-only GUI. Open unified TEC + Huber JSON files with power_live_log_gui.py.')
             return
         cfg = LiveLoggerConfig.from_json_file(path_text)
         self.serial_port.set(cfg.serial_port or '')
@@ -219,7 +219,7 @@ class TecLiveLoggerGui:
         total_duration = 0.0
         try:
             content = json.loads(Path(path_text).read_text(encoding='utf-8'))
-            schedule = content.get('power_schedule', [])
+            schedule = content.get('power_schedule') or legacy_tec_steps_to_power_schedule(content)
             self.loaded_power_schedule = list(schedule)
             t = 0.0
             for step in schedule:
