@@ -177,11 +177,16 @@ class DualDeviceRunEngine:
         emit("state_transition", next_state=state.value, **extra)
 
     def _apply_step(self, step: UnifiedStep, legacy_power_policy: str) -> None:
-        self.bath_adapter.set_setpoint(step.bath_setpoint_c)
+        if step.bath_setpoint_c is not None:
+            self.bath_adapter.set_setpoint(step.bath_setpoint_c)
+        has_tec_request = step.tec_power_w is not None or step.tec_voltage_v is not None or step.tec_current_a is not None
+        if not has_tec_request:
+            return
+        tec_power_w = float(step.tec_power_w or 0.0)
         if legacy_power_policy == LegacyPowerPolicy.LEGACY_VOLTAGE_MODE.value and hasattr(self.tec_adapter, "apply_legacy_step"):
             self.tec_adapter.apply_legacy_step(step)
             return
-        if step.tec_power_w == 0.0 and step.tec_voltage_v is None and step.tec_current_a is None and hasattr(self.tec_adapter, "set_voltage_current"):
+        if tec_power_w == 0.0 and step.tec_voltage_v is None and step.tec_current_a is None and hasattr(self.tec_adapter, "set_voltage_current"):
             # Belt-and-suspenders zeroing for unified runs:
             # clear explicit V/I setpoints before disabling output to avoid residual bias.
             self.tec_adapter.set_voltage_current(0.0, 0.0)
@@ -192,7 +197,7 @@ class DualDeviceRunEngine:
             current_a = float(step.tec_current_a or 0.0)
             self.tec_adapter.set_voltage_current(voltage_v, current_a)
             return
-        self.tec_adapter.set_power(step.tec_power_w)
+        self.tec_adapter.set_power(tec_power_w)
 
     def _sample_row(self, step_index: int, step: UnifiedStep) -> Dict[str, Any]:
         row = build_time_columns(datetime.now(timezone.utc))
@@ -237,7 +242,7 @@ class DualDeviceRunEngine:
         ambiguous = [
             idx
             for idx, step in enumerate(run_config.steps)
-            if step.tec_power_w == 0.0 and getattr(step, "_legacy_nonzero_intent", False)
+            if (step.tec_power_w or 0.0) == 0.0 and getattr(step, "_legacy_nonzero_intent", False)
         ]
         if not ambiguous:
             return
