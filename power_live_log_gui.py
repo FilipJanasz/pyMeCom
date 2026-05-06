@@ -9,6 +9,10 @@ from dataclasses import asdict
 from pathlib import Path
 from tkinter import BOTH, END, LEFT, RIGHT, VERTICAL, Button, Checkbutton, Entry, Frame, IntVar, Label, Listbox, Radiobutton, Scrollbar, StringVar, Tk, filedialog, messagebox
 
+from serial.tools import list_ports
+
+from huberStuff.pyPbCmd.huber_adapter import HUBER_AVAILABLE as HUBER_HARDWARE_CLIENT_AVAILABLE
+
 from workflows.automation.common.live_logger import CalibrationStep, LiveLogger, LiveLoggerConfig, PowerScheduleStep, SafeChannelController, default_live_parameters, legacy_tec_steps_to_power_schedule, looks_like_unified_run_config
 from workflows.automation.common.run_config import RunConfig
 from workflows.automation.common.run_engine import DualDeviceRunEngine, LegacyPowerPolicy
@@ -128,6 +132,11 @@ class LiveLoggerGui:
         self.unified_engine: DualDeviceRunEngine | None = None
         self.status_text = StringVar(value='Controller status: unknown')
         self.status_indicator_text = StringVar(value='●')
+        self.tec_connection_text = StringVar(value='TEC: not checked')
+        self.tec_connection_indicator_text = StringVar(value='●')
+        self.huber_connection_text = StringVar(value='Huber: not checked')
+        self.huber_connection_indicator_text = StringVar(value='●')
+        self.available_ports_text = StringVar(value='Serial tools: click Scan COM Ports to list available ports.')
         self.sample_rate_text = StringVar(value='Measured acquisition rate: n/a')
         self._last_sample_ts: float | None = None
 
@@ -197,6 +206,42 @@ class LiveLoggerGui:
         Radiobutton(top, text='Unified', variable=self.run_mode_selection, value='Unified').grid(row=3, column=0, sticky='w', padx=(220, 0))
         Label(top, text='Detected from JSON:').grid(row=3, column=1, sticky='e', padx=(0, 110))
         Label(top, textvariable=self.detected_mode, font=('TkDefaultFont', 9, 'bold')).grid(row=3, column=1, sticky='e')
+
+        detect_frame = Frame(top, padx=4, pady=4, relief='groove', bd=1)
+        detect_frame.grid(row=4, column=0, columnspan=2, sticky='nsew', pady=(8, 0))
+        detect_frame.grid_columnconfigure(0, weight=1)
+        detect_frame.grid_columnconfigure(1, weight=1)
+        Label(detect_frame, text='Dedicated Connection Detection', font=('TkDefaultFont', 10, 'bold')).grid(row=0, column=0, columnspan=2, sticky='w')
+
+        tec_detect_frame = Frame(detect_frame, padx=4, pady=4)
+        tec_detect_frame.grid(row=1, column=0, sticky='nsew', padx=(0, 4))
+        huber_detect_frame = Frame(detect_frame, padx=4, pady=4)
+        huber_detect_frame.grid(row=1, column=1, sticky='nsew', padx=(4, 0))
+        tec_detect_frame.grid_columnconfigure(1, weight=1)
+        huber_detect_frame.grid_columnconfigure(1, weight=1)
+
+        Label(tec_detect_frame, text='TEC connection', font=('TkDefaultFont', 9, 'bold')).grid(row=0, column=0, columnspan=3, sticky='w')
+        self.tec_connection_indicator_label = Label(tec_detect_frame, textvariable=self.tec_connection_indicator_text, fg='gray50', font=('TkDefaultFont', 12, 'bold'))
+        self.tec_connection_indicator_label.grid(row=1, column=0, sticky='w')
+        Label(tec_detect_frame, textvariable=self.tec_connection_text).grid(row=1, column=1, columnspan=2, sticky='w')
+        Label(tec_detect_frame, text='Port').grid(row=2, column=0, sticky='w')
+        Entry(tec_detect_frame, textvariable=self.serial_port, width=26).grid(row=2, column=1, sticky='we')
+        Checkbutton(tec_detect_frame, text='Autodetect if blank', variable=self.serial_autodetect).grid(row=2, column=2, sticky='w')
+        Label(tec_detect_frame, text='Hint').grid(row=3, column=0, sticky='w')
+        Entry(tec_detect_frame, textvariable=self.serial_hint, width=26).grid(row=3, column=1, sticky='we')
+        Button(tec_detect_frame, text='Scan COM Ports', command=self.scan_serial_ports).grid(row=4, column=0, sticky='w')
+        Button(tec_detect_frame, text='Detect TEC', command=self.detect_controller).grid(row=4, column=1, sticky='w')
+
+        Label(huber_detect_frame, text='Huber connection', font=('TkDefaultFont', 9, 'bold')).grid(row=0, column=0, columnspan=3, sticky='w')
+        self.huber_connection_indicator_label = Label(huber_detect_frame, textvariable=self.huber_connection_indicator_text, fg='gray50', font=('TkDefaultFont', 12, 'bold'))
+        self.huber_connection_indicator_label.grid(row=1, column=0, sticky='w')
+        Label(huber_detect_frame, textvariable=self.huber_connection_text).grid(row=1, column=1, columnspan=2, sticky='w')
+        Label(huber_detect_frame, text='Port').grid(row=2, column=0, sticky='w')
+        Entry(huber_detect_frame, textvariable=self.huber_port, width=26).grid(row=2, column=1, sticky='we')
+        Button(huber_detect_frame, text='Scan COM Ports', command=self.scan_serial_ports).grid(row=3, column=0, sticky='w')
+        Button(huber_detect_frame, text='Detect Huber', command=self.detect_huber).grid(row=3, column=1, sticky='w')
+        Label(detect_frame, textvariable=self.available_ports_text).grid(row=2, column=0, columnspan=2, sticky='w')
+
         conn_frame.grid_columnconfigure(1, weight=1)
         io_frame.grid_columnconfigure(1, weight=1)
 
@@ -611,6 +656,8 @@ class LiveLoggerGui:
                 return
         cfg = self._build_config()
         self._set_controller_status('yellow', 'Controller status: connecting (starting logger)')
+        self._set_tec_connection_status('yellow', 'TEC: connecting (starting logger)')
+        self._set_huber_connection_status('gray', 'Huber: not used for TEC-only run')
         parameter_columns = [spec.label for spec in cfg.parameters]
         default_col = next((label for label in parameter_columns if 'act u' in label.lower()), parameter_columns[0])
         self._configure_live_plot_columns(parameter_columns, [default_col])
@@ -625,6 +672,7 @@ class LiveLoggerGui:
         def on_started(path: Path) -> None:
             self.last_output_csv = path
             self.root.after(0, lambda: self._set_controller_status('green', f'Controller status: connected (logging to {path.name})'))
+            self.root.after(0, lambda: self._set_tec_connection_status('green', f'TEC: connected (logging to {path.name})'))
 
         def on_row(row: dict[str, object]) -> None:
             t = row.get('OLE Automation Date')
@@ -664,11 +712,13 @@ class LiveLoggerGui:
             except Exception as exc:
                 error_message = self._format_run_error(exc)
                 self.root.after(0, lambda e=exc: self._set_controller_status('red', f'Controller status: not detected ({e})'))
+                self.root.after(0, lambda e=exc: self._set_tec_connection_status('red', f'TEC: not connected ({e})'))
                 self.root.after(0, lambda msg=error_message: messagebox.showerror('Run failed', msg))
             finally:
                 self.animating = False
                 if self.stop_requested:
                     self.root.after(0, lambda: self._set_controller_status('yellow', 'Controller status: stopped by user'))
+                    self.root.after(0, lambda: self._set_tec_connection_status('yellow', 'TEC: stopped by user'))
 
         self.run_thread = threading.Thread(target=worker, daemon=True)
         self.run_thread.start()
@@ -693,15 +743,32 @@ class LiveLoggerGui:
         has_any_huber_request = any(step.bath_setpoint_c is not None for step in run_cfg.steps)
         tec_adapter = TecPowerAdapter(self._build_config()) if has_any_tec_request else NoopTecAdapter()
         bath_adapter = HuberWorkflowAdapter(port=self.huber_port.get().strip() or None) if has_any_huber_request else NoopBathAdapter()
+        if has_any_tec_request:
+            self._set_tec_connection_status('yellow', 'TEC: connecting (unified run)')
+        else:
+            self._set_tec_connection_status('gray', 'TEC: not requested by loaded JSON')
+        if has_any_huber_request:
+            self._set_huber_connection_status('yellow', 'Huber: connecting (unified run)')
+        else:
+            self._set_huber_connection_status('gray', 'Huber: not requested by loaded JSON')
         engine = DualDeviceRunEngine(tec_adapter, bath_adapter, output_directory=self.output_directory.get().strip() or 'live_logs', sample_hz=hz)
         self.unified_engine = engine
 
         def on_event(evt: dict[str, object]) -> None:
             state = str(evt.get("next_state") or evt.get("state") or "")
             self.root.after(0, lambda s=state: self.status_text.set(f'Engine state: {s}'))
+            if evt.get("event") == "state_transition" and evt.get("next_state") == "RUNNING_STEP":
+                if has_any_tec_request:
+                    self.root.after(0, lambda: self._set_tec_connection_status('green', 'TEC: connected (unified run)'))
+                if has_any_huber_request:
+                    self.root.after(0, lambda: self._set_huber_connection_status('green', 'Huber: connected (unified run)'))
             if evt.get("event") == "state_transition" and evt.get("next_state") == "ERROR":
                 error = str(evt.get('error', 'unknown'))
                 self.root.after(0, lambda err=error: self._set_controller_status('red', f'Controller status: error ({err})'))
+                if has_any_tec_request:
+                    self.root.after(0, lambda err=error: self._set_tec_connection_status('red', f'TEC: error ({err})'))
+                if has_any_huber_request:
+                    self.root.after(0, lambda err=error: self._set_huber_connection_status('red', f'Huber: error ({err})'))
 
         def on_row(row: dict[str, object]) -> None:
             t = row.get('OLE Automation Date')
@@ -725,9 +792,20 @@ class LiveLoggerGui:
             try:
                 self.root.after(0, lambda: self._set_controller_status('yellow', 'Controller status: connecting (unified run)'))
                 paths = engine.run(run_cfg, legacy_power_policy=LegacyPowerPolicy.ALLOW_ZERO_POWER.value, event_callback=on_event, row_callback=on_row)
-                self.root.after(0, lambda p=paths.csv_path.name: self._set_controller_status('green', f'Controller status: unified run complete ({p})'))
+                if getattr(engine.state, 'value', str(engine.state)) == 'ERROR':
+                    self.root.after(0, lambda p=paths.csv_path.name: self._set_controller_status('red', f'Controller status: unified run ended in ERROR ({p})'))
+                else:
+                    self.root.after(0, lambda p=paths.csv_path.name: self._set_controller_status('green', f'Controller status: unified run complete ({p})'))
+                    if has_any_tec_request:
+                        self.root.after(0, lambda: self._set_tec_connection_status('green', 'TEC: connected (unified run complete)'))
+                    if has_any_huber_request:
+                        self.root.after(0, lambda: self._set_huber_connection_status('green', 'Huber: connected (unified run complete)'))
             except Exception as exc:
                 self.root.after(0, lambda e=exc: self._set_controller_status('red', f'Controller status: unified run failed ({e})'))
+                if has_any_tec_request:
+                    self.root.after(0, lambda e=exc: self._set_tec_connection_status('red', f'TEC: failed ({e})'))
+                if has_any_huber_request:
+                    self.root.after(0, lambda e=exc: self._set_huber_connection_status('red', f'Huber: failed ({e})'))
                 self.root.after(0, lambda e=exc: messagebox.showerror('Unified run failed', str(e)))
             finally:
                 self.animating = False
@@ -878,32 +956,110 @@ class LiveLoggerGui:
                     )
                 )
             self._set_controller_status('green', f'Controller status: output forced to zero ({endpoint})')
+            self._set_tec_connection_status('green', f'TEC: connected; output forced to zero ({endpoint})')
         except Exception as exc:
             self._set_controller_status('red', f'Controller status: zero-output failed ({exc})')
+            self._set_tec_connection_status('red', f'TEC: zero-output failed ({exc})')
             messagebox.showerror('Zero output failed', str(exc))
+
+    @staticmethod
+    def _format_serial_port_choices(port_infos) -> str:
+        rows = []
+        for port in port_infos:
+            device = getattr(port, 'device', '')
+            description = getattr(port, 'description', '')
+            hwid = getattr(port, 'hwid', '')
+            details = ' | '.join(part for part in (description, hwid) if part)
+            rows.append(f'{device} - {details}' if details else str(device))
+        return '; '.join(rows) if rows else 'No serial ports found.'
+
+    def _available_serial_port_choices(self) -> str:
+        return self._format_serial_port_choices(list_ports.comports())
+
+    def scan_serial_ports(self) -> None:
+        try:
+            choices = self._available_serial_port_choices()
+        except Exception as exc:
+            self.available_ports_text.set(f'Serial tools: scan failed ({exc})')
+            messagebox.showerror('Scan COM Ports failed', str(exc))
+            return
+        self.available_ports_text.set(f'Serial tools: {choices}')
+        messagebox.showinfo('Available COM Ports', choices)
 
     def detect_controller(self) -> None:
         try:
             self._set_controller_status('yellow', 'Controller status: connecting (detecting TEC)')
+            self._set_tec_connection_status('yellow', 'TEC: detecting connection')
             logger = LiveLogger(self._build_config())
             session_manager, endpoint = logger._open_session()
             if endpoint:
                 self.serial_port.set(str(endpoint))
-                self.serial_autodetect.set(1)
-            with session_manager:
-                pass
-            self._set_controller_status('green', f'Controller status: connected ({endpoint})')
+                # After a successful detection, keep using the explicit port so
+                # future starts do not depend on fragile autodetection ordering.
+                self.serial_autodetect.set(0)
+            with session_manager as session:
+                detected_address = session.identify(address=int(self.address.get()))
+            self._set_controller_status('green', f'Controller status: connected ({endpoint}, address {detected_address})')
+            self._set_tec_connection_status('green', f'TEC: detected and connection verified ({endpoint}, address {detected_address})')
         except Exception as exc:
             self._set_controller_status('red', f'Controller status: not detected ({exc})')
+            self._set_tec_connection_status('red', f'TEC: not detected or connected ({exc})')
 
-    def _set_controller_status(self, state: str, text: str) -> None:
+    def detect_huber(self) -> None:
+        adapter = None
+        try:
+            self._set_huber_connection_status('yellow', 'Huber: detecting connection')
+            adapter = HuberWorkflowAdapter(port=self.huber_port.get().strip() or None)
+            if not adapter.connect():
+                connection = getattr(adapter, '_connection', None)
+                detail = getattr(connection, 'last_error_message', None) or getattr(connection, 'last_error_code', None) or 'connect() returned False'
+                raise RuntimeError(detail)
+            connection = getattr(adapter, '_connection', None)
+            detected_port = getattr(connection, 'port', None)
+            if detected_port:
+                self.huber_port.set(str(detected_port))
+            hardware_client_available = bool(HUBER_HARDWARE_CLIENT_AVAILABLE)
+            bath_temp = adapter.read_bath_temp()
+            setpoint = adapter.read_setpoint()
+            detail_parts = []
+            if detected_port:
+                detail_parts.append(str(detected_port))
+            if bath_temp is not None:
+                detail_parts.append(f'bath {bath_temp:g} °C')
+            if setpoint is not None:
+                detail_parts.append(f'setpoint {setpoint:g} °C')
+            details = ', '.join(detail_parts) if detail_parts else 'no explicit port'
+            if hardware_client_available:
+                self._set_huber_connection_status('green', f'Huber: detected and connection verified ({details})')
+            else:
+                self._set_huber_connection_status('yellow', f'Huber: hardware client unavailable; simulation response only ({details})')
+        except Exception as exc:
+            self._set_huber_connection_status('red', f'Huber: not detected or connected ({exc})')
+        finally:
+            if adapter is not None:
+                adapter.close()
+
+    @staticmethod
+    def _connection_color(state: str) -> str:
         color_map = {
             'red': 'firebrick',
             'yellow': 'goldenrod',
             'green': 'forest green',
+            'gray': 'gray50',
         }
-        self.status_indicator_label.configure(fg=color_map.get(state, 'black'))
+        return color_map.get(state, 'black')
+
+    def _set_controller_status(self, state: str, text: str) -> None:
+        self.status_indicator_label.configure(fg=self._connection_color(state))
         self.status_text.set(text)
+
+    def _set_tec_connection_status(self, state: str, text: str) -> None:
+        self.tec_connection_indicator_label.configure(fg=self._connection_color(state))
+        self.tec_connection_text.set(text)
+
+    def _set_huber_connection_status(self, state: str, text: str) -> None:
+        self.huber_connection_indicator_label.configure(fg=self._connection_color(state))
+        self.huber_connection_text.set(text)
 
 
 def main() -> int:
