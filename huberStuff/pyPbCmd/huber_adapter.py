@@ -1,18 +1,41 @@
 # -*- coding: utf-8 -*-
 from typing import Optional
+from importlib import import_module, util
 import logging
 import serial
 
-try:
-    from huber_thermostat import (
-        HuberThermostatI,
-        HuberThermostatTools,
-        HUBER_DEFAULT_BAUDRATE,
-        HUBER_DEFAULT_TIMEOUT,
+
+HUBER_CLIENT_MODULE_CANDIDATES = (
+    "huber_thermostat",
+    "huberStuff.pyPbCmd.HuberPkg.huber_thermostat",
+    "HuberPkg.huber_thermostat",
+)
+
+
+def _module_spec_exists(module_name: str) -> bool:
+    top_level = module_name.split(".", 1)[0]
+    if util.find_spec(top_level) is None:
+        return False
+    return util.find_spec(module_name) is not None
+
+
+def _load_huber_client_module():
+    for module_name in HUBER_CLIENT_MODULE_CANDIDATES:
+        if _module_spec_exists(module_name):
+            return import_module(module_name)
+    raise ImportError(
+        "No Huber thermostat client found. Expected an installed "
+        "huber_thermostat package or the bundled HuberPkg client."
     )
-    HUBER_AVAILABLE = True
-except ImportError:
-    HUBER_AVAILABLE = False
+
+
+_huber_client_module = _load_huber_client_module()
+HuberThermostatI = _huber_client_module.HuberThermostatI
+HuberThermostatTools = _huber_client_module.HuberThermostatTools
+HUBER_DEFAULT_BAUDRATE = _huber_client_module.HUBER_DEFAULT_BAUDRATE
+HUBER_DEFAULT_TIMEOUT = _huber_client_module.HUBER_DEFAULT_TIMEOUT
+HUBER_AVAILABLE = True
+HUBER_CLIENT_SOURCE = _huber_client_module.__name__
 
 
 logger = logging.getLogger("huber.adapter")
