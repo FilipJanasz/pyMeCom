@@ -75,8 +75,42 @@ class RunConfigTests(unittest.TestCase):
         self.assertEqual(step.name, "legacy")
         self.assertEqual(step.tec_power_w, 4.2)
         self.assertEqual(step.duration_s, 10.0)
-        self.assertEqual(step.bath_setpoint_c, 25.0)
+        self.assertIsNone(step.bath_setpoint_c)
         self.assertEqual(step.progression_mode, "time")
+
+    def test_shared_steps_can_be_tec_only_or_huber_only(self):
+        cfg = RunConfig.from_dict(
+            {
+                "steps": [
+                    {"name": "tec", "tec_power_w": 1.5, "duration_s": 10},
+                    {"name": "bath", "bath_setpoint_c": 30.0, "duration_s": 20},
+                ]
+            }
+        )
+        self.assertEqual(cfg.steps[0].tec_power_w, 1.5)
+        self.assertIsNone(cfg.steps[0].bath_setpoint_c)
+        self.assertIsNone(cfg.steps[1].tec_power_w)
+        self.assertEqual(cfg.steps[1].bath_setpoint_c, 30.0)
+
+    def test_legacy_top_level_steps_map_to_shared_config(self):
+        cfg = RunConfig.from_dict(
+            {
+                "steps": [
+                    {
+                        "name": "legacy",
+                        "power": 0.25,
+                        "dwell_seconds": 5,
+                        "set_voltage": 1.0,
+                        "set_current": 0.2,
+                    }
+                ]
+            }
+        )
+        step = cfg.steps[0]
+        self.assertEqual(step.duration_s, 5.0)
+        self.assertEqual(step.tec_power_w, 0.25)
+        self.assertEqual(step.tec_voltage_v, 1.0)
+        self.assertEqual(step.tec_current_a, 0.2)
 
     def test_from_json_file(self):
         payload = {
@@ -111,9 +145,13 @@ class RunConfigTests(unittest.TestCase):
                 }
             )
 
-    def test_missing_required_field_rejected(self):
+    def test_missing_duration_rejected(self):
         with self.assertRaisesRegex(ValueError, "missing required keys"):
-            RunConfig.from_dict({"steps": [{"name": "s1", "tec_power_w": 1, "duration_s": 10}]})
+            RunConfig.from_dict({"steps": [{"name": "s1", "tec_power_w": 1}]})
+
+    def test_step_without_any_device_request_rejected(self):
+        with self.assertRaisesRegex(ValueError, "at least one device setpoint"):
+            RunConfig.from_dict({"steps": [{"name": "s1", "duration_s": 10}]})
 
     def test_legacy_mapping_default_name(self):
         cfg = RunConfig.from_dict({"power_schedule": [{"power": 1.1, "duration_seconds": 7}]})

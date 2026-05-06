@@ -13,9 +13,9 @@ ProgressionMode = Literal["time", "stability"]
 @dataclass
 class UnifiedStep:
     name: str
-    bath_setpoint_c: float
-    tec_power_w: float
     duration_s: float
+    bath_setpoint_c: Optional[float] = None
+    tec_power_w: Optional[float] = None
     tec_voltage_v: Optional[float] = None
     tec_current_a: Optional[float] = None
     progression_mode: ProgressionMode = "time"
@@ -25,29 +25,30 @@ class UnifiedStep:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any], step_index: int) -> "UnifiedStep":
-        required = ["name", "bath_setpoint_c", "tec_power_w", "duration_s"]
-        missing = [key for key in required if key not in data]
+        normalized = _normalize_step_dict(data, step_index)
+        required = ["name", "duration_s"]
+        missing = [key for key in required if key not in normalized]
         if missing:
             raise ValueError(f"Unified step {step_index} is missing required keys: {missing}")
 
-        progression_mode = str(data.get("progression_mode", "time")).strip().lower()
+        progression_mode = str(normalized.get("progression_mode", "time")).strip().lower()
         if progression_mode not in {"time", "stability"}:
             raise ValueError(
                 f"Unified step {step_index} has invalid progression_mode={progression_mode!r}; expected 'time' or 'stability'"
             )
 
-        legacy_nonzero_intent = bool(data.get("_legacy_nonzero_intent", False))
+        legacy_nonzero_intent = bool(normalized.get("_legacy_nonzero_intent", False))
         step = cls(
-            name=str(data["name"]),
-            bath_setpoint_c=float(data["bath_setpoint_c"]),
-            tec_power_w=float(data["tec_power_w"]),
-            tec_voltage_v=_optional_float(data.get("tec_voltage_v")),
-            tec_current_a=_optional_float(data.get("tec_current_a")),
-            duration_s=float(data["duration_s"]),
+            name=str(normalized["name"]),
+            duration_s=float(normalized["duration_s"]),
+            bath_setpoint_c=_optional_float(normalized.get("bath_setpoint_c")),
+            tec_power_w=_optional_float(normalized.get("tec_power_w")),
+            tec_voltage_v=_optional_float(normalized.get("tec_voltage_v")),
+            tec_current_a=_optional_float(normalized.get("tec_current_a")),
             progression_mode=progression_mode,
-            stability_band_c=_optional_float(data.get("stability_band_c")),
-            stability_hold_s=_optional_float(data.get("stability_hold_s")),
-            stability_timeout_s=_optional_float(data.get("stability_timeout_s")),
+            stability_band_c=_optional_float(normalized.get("stability_band_c")),
+            stability_hold_s=_optional_float(normalized.get("stability_hold_s")),
+            stability_timeout_s=_optional_float(normalized.get("stability_timeout_s")),
         )
         step.validate(step_index)
         setattr(step, "_legacy_nonzero_intent", legacy_nonzero_intent)
@@ -58,6 +59,13 @@ class UnifiedStep:
             raise ValueError(f"Unified step {step_index} has an empty name")
         if not math.isfinite(self.duration_s) or self.duration_s <= 0.0:
             raise ValueError(f"Unified step {step_index} duration_s must be finite and > 0")
+        if self.bath_setpoint_c is not None and not math.isfinite(self.bath_setpoint_c):
+            raise ValueError(f"Unified step {step_index} bath_setpoint_c must be finite when provided")
+        if self.tec_power_w is not None and not math.isfinite(self.tec_power_w):
+            raise ValueError(f"Unified step {step_index} tec_power_w must be finite when provided")
+        has_tec_request = self.tec_power_w is not None or self.tec_voltage_v is not None or self.tec_current_a is not None
+        if self.bath_setpoint_c is None and not has_tec_request:
+            raise ValueError(f"Unified step {step_index} must request at least one device setpoint")
         if self.tec_voltage_v is not None and not math.isfinite(self.tec_voltage_v):
             raise ValueError(f"Unified step {step_index} tec_voltage_v must be finite when provided")
         if self.tec_current_a is not None and not math.isfinite(self.tec_current_a):
@@ -130,6 +138,27 @@ def _optional_float(value: Any) -> Optional[float]:
     return float(value)
 
 
+def _normalize_step_dict(data: Dict[str, Any], step_index: int) -> Dict[str, Any]:
+    normalized = dict(data)
+    normalized.setdefault("name", f"step_{step_index + 1}")
+    if "duration_s" not in normalized:
+        if "duration_seconds" in normalized:
+            normalized["duration_s"] = normalized.get("duration_seconds")
+        elif "dwell_seconds" in normalized:
+            normalized["duration_s"] = normalized.get("dwell_seconds")
+    if "tec_power_w" not in normalized and "power" in normalized:
+        normalized["tec_power_w"] = normalized.get("power")
+    if "tec_voltage_v" not in normalized and "set_voltage" in normalized:
+        normalized["tec_voltage_v"] = normalized.get("set_voltage")
+    if "tec_current_a" not in normalized and "set_current" in normalized:
+        normalized["tec_current_a"] = normalized.get("set_current")
+    if "tec_power_w" not in normalized and ("tec_voltage_v" in normalized or "tec_current_a" in normalized):
+        normalized["tec_power_w"] = 0.0
+    if "progression_mode" not in normalized:
+        normalized["progression_mode"] = "time"
+    return normalized
+
+
 def _map_tec_power_schedule_to_unified_steps(power_schedule: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     mapped: List[Dict[str, Any]] = []
     for idx, legacy in enumerate(power_schedule):
@@ -139,10 +168,11 @@ def _map_tec_power_schedule_to_unified_steps(power_schedule: List[Dict[str, Any]
         mapped.append(
             {
                 "name": name,
-                "bath_setpoint_c": 25.0,
                 "tec_power_w": tec_power_w,
                 "duration_s": duration_s,
                 "progression_mode": "time",
+                "tec_voltage_v": legacy.get("set_voltage"),
+                "tec_current_a": legacy.get("set_current"),
                 "_legacy_nonzero_intent": bool((legacy.get("set_voltage") or 0) != 0 or (legacy.get("set_current") or 0) != 0),
             }
         )

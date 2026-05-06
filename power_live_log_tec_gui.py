@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from tkinter import BOTH, END, LEFT, RIGHT, VERTICAL, Button, Checkbutton, Entry, Frame, IntVar, Label, Listbox, Scrollbar, StringVar, Tk, filedialog, messagebox
 
-from workflows.automation.common.live_logger import CalibrationStep, LiveLogger, LiveLoggerConfig, PowerScheduleStep, SafeChannelController, default_live_parameters, legacy_tec_steps_to_power_schedule, looks_like_unified_run_config
+from workflows.automation.common.live_logger import CalibrationStep, LiveLogger, LiveLoggerConfig, PowerScheduleStep, SafeChannelController, default_live_parameters, legacy_tec_steps_to_power_schedule
 
 if importlib.util.find_spec('matplotlib') is not None:
     import matplotlib.dates as mdates
@@ -197,9 +197,6 @@ class TecLiveLoggerGui:
         if not path_text:
             return
         content = json.loads(Path(path_text).read_text(encoding='utf-8'))
-        if looks_like_unified_run_config(content):
-            messagebox.showerror('Unified JSON selected', 'This is the TEC-only GUI. Open unified TEC + Huber JSON files with power_live_log_gui.py.')
-            return
         cfg = LiveLoggerConfig.from_json_file(path_text)
         self.serial_port.set(cfg.serial_port or '')
         self.serial_autodetect.set(1 if cfg.serial_port_autodetect else 0)

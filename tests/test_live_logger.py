@@ -54,7 +54,7 @@ class LiveLoggerLegacyConfigTests(unittest.TestCase):
         self.assertEqual(config.power_schedule[1].set_current, 0.25)
         self.assertTrue(config.power_schedule[1].enable_output)
 
-    def test_true_unified_steps_rejected_for_tec_only_mode(self):
+    def test_shared_steps_are_valid_for_tec_only_mode(self):
         from power_live_log_gui import LiveLoggerGui
         unified = {
             'transport': 'com',
@@ -69,7 +69,17 @@ class LiveLoggerLegacyConfigTests(unittest.TestCase):
         }
         self.assertTrue(looks_like_unified_run_config(unified))
         gui = LiveLoggerGui.__new__(LiveLoggerGui)
-        self.assertIn('cannot run unified', gui._validate_mode_compatibility(unified, 'TEC-only'))
+        self.assertIsNone(gui._validate_mode_compatibility(unified, 'TEC-only'))
+        config = LiveLoggerConfig.from_dict(unified)
+        self.assertEqual(len(config.power_schedule), 1)
+        self.assertEqual(config.power_schedule[0].power, 5.0)
+        self.assertEqual(config.power_schedule[0].duration_seconds, 300.0)
+
+    def test_huber_only_shared_steps_are_ignored_by_tec_schedule(self):
+        huber_only = {'steps': [{'name': 'bath_only', 'bath_setpoint_c': 30.0, 'duration_s': 60}]}
+        self.assertTrue(looks_like_unified_run_config(huber_only))
+        config = LiveLoggerConfig.from_dict(huber_only)
+        self.assertEqual(config.power_schedule, [])
 
     def test_old_tec_steps_are_valid_for_tec_only_mode(self):
         from power_live_log_gui import LiveLoggerGui

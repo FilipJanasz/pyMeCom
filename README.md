@@ -5,8 +5,8 @@ A Python interface for the MeCom protocol by Meerstetter, with workflow tooling 
 
 ## GUI entry points
 
-- **TEC-only live logger GUI:** run `python power_live_log_tec_gui.py` to use the standalone Meerstetter TEC logger workflow without Huber or unified-run controls. This is the recommended GUI while the unified workflow is being debugged. It accepts legacy live-logger JSON with `power_schedule` and older TEC calibration JSON with top-level `steps` that use fields such as `dwell_seconds`, `set_voltage`, `set_current`, `power`, and `enable_output`.
-- **Unified TEC + Huber GUI:** run `python power_live_log_gui.py` for the combined bath/TEC scheduler and unified log workflow. Its TEC-only mode accepts the same legacy TEC formats as the standalone TEC GUI; true unified JSON is detected only when `steps[]` contains unified fields such as `bath_setpoint_c`, `tec_power_w`, `duration_s`, progression/stability fields, or a unified `safety` block.
+- **TEC-only live logger GUI:** run `python power_live_log_tec_gui.py` to use the standalone Meerstetter TEC logger workflow without Huber controls. It accepts legacy live-logger JSON with `power_schedule`, older TEC calibration JSON with top-level `steps`, and shared step-based JSON; Huber-only fields are ignored by this GUI.
+- **Unified TEC + Huber GUI:** run `python power_live_log_gui.py` for the combined bath/TEC scheduler and unified log workflow. Both TEC-only and Unified run modes accept the same shared step-based JSON. If a loaded step does not request a device (`bath_setpoint_c` for Huber, or `tec_power_w`/`tec_voltage_v`/`tec_current_a` for TEC), that device is not connected or commanded for that run.
 
 ## New integration direction: TEC + Huber unified calibration app
 
@@ -28,7 +28,7 @@ This repository is being extended to support a single calibration workflow that 
 
 ### Phase 1 (MVP)
 
-- JSON-configured run steps containing bath setpoint, TEC power setpoint, and dwell duration.
+- JSON-configured run steps containing bath and/or TEC setpoints plus dwell duration.
 - GUI flow similar to current TEC-only tooling: load config, preview, start/stop, view status.
 - Unified sampled log output (same style as current TEC logging outputs).
 - Safe state behavior on completion/failure.
@@ -68,15 +68,18 @@ A new JSON model is available under `workflows/automation/common/run_config.py`:
 - `UnifiedStep`
 - `SafetyConfig`
 
-### Unified step fields (MVP)
+### Shared/unified step fields (MVP)
 
 Each `steps[]` entry supports:
 
-- `name` (string)
-- `bath_setpoint_c` (number)
-- `tec_power_w` (number)
+- `name` (string; defaults to `step_N` when omitted)
 - `duration_s` (seconds, number > 0)
+- `bath_setpoint_c` (optional number; requests a Huber bath setpoint)
+- `tec_power_w` (optional number; requests a TEC power setpoint)
+- `tec_voltage_v` and `tec_current_a` (optional numbers; request the TEC voltage/current path used by the GUI curve builder)
 - `progression_mode` (`"time"` default, or `"stability"`)
+
+A step may be TEC-only, Huber-only, or TEC+Huber. The run engine and GUIs ignore devices that are not requested by the loaded JSON, so the same shared file can be used in TEC-only and TEC+Huber workflows.
 
 ### Phase-2-ready optional stability fields
 
@@ -103,15 +106,17 @@ Explicit mapping behavior:
 - `legacy.name` -> `UnifiedStep.name`
 - `legacy.power` -> `UnifiedStep.tec_power_w`
 - `legacy.duration_seconds` -> `UnifiedStep.duration_s`
-- `UnifiedStep.bath_setpoint_c` defaults to `25.0`
+- `UnifiedStep.bath_setpoint_c` remains unset for TEC-only legacy inputs, so Huber is ignored
 - `UnifiedStep.progression_mode` defaults to `"time"`
-- `legacy.set_voltage`, `legacy.set_current`, and `legacy.enable_output` are intentionally ignored by Stage 2 schema mapping because `UnifiedStep` is power-driven (`tec_power_w`)
+- `legacy.set_voltage` and `legacy.set_current` map to `UnifiedStep.tec_voltage_v` and `UnifiedStep.tec_current_a`
 
 This allows incremental migration while keeping existing TEC-only configs usable for schema parsing.
 
-For the TEC-only live logger GUI, older TEC calibration `steps[]` entries are converted into `power_schedule[]` entries. The conversion preserves `name`, `power`, `set_voltage`, `set_current`, and `enable_output`, and maps `dwell_seconds` (or `duration_seconds`) to `duration_seconds` for preview and live logger execution.
+For the TEC-only live logger GUI, older TEC calibration `steps[]` entries and shared/unified `steps[]` entries are converted into TEC `power_schedule[]` entries when they contain TEC fields. The conversion preserves `name`, `power`/`tec_power_w`, `set_voltage`/`tec_voltage_v`, `set_current`/`tec_current_a`, and `enable_output`; Huber-only steps are skipped by the TEC scheduler.
 
-See `examples/unified_run_config.example.json` for a unified example. In that file, each `steps[]` item is a coordinated TEC + Huber action: `bath_setpoint_c` is the Huber bath setpoint, `tec_power_w` is the TEC requested power, and `duration_s` is how long the run engine dwells before advancing. The second example step uses `progression_mode: "stability"` with stability fields as a Phase-2 template; the current MVP remains time-based unless stability progression is explicitly enabled in the run engine. The top-level `safety` block defines what the engine should do on stop/error: zero or safe TEC output, return the bath to standby, and apply the pump safe state.
+See `examples/unified_run_config.example.json` for a shared TEC + Huber example. In that file, each `steps[]` item is a coordinated action: `bath_setpoint_c` is the Huber bath setpoint, `tec_power_w` is the TEC requested power, and `duration_s` is how long the run engine dwells before advancing. The second example step uses `progression_mode: "stability"` with stability fields as a Phase-2 template; the current MVP remains time-based unless stability progression is explicitly enabled in the run engine. The top-level `safety` block defines what the engine should do on stop/error: zero or safe TEC output, return the bath to standby, and apply the pump safe state.
+
+The GUI **Build Unified Example JSON** button writes a starter shared JSON file from the editable curve fields in the **Config & Output** section. It zips together `Huber Temp Curve °C`, `TEC Voltage Curve V`, and `TEC Current Curve A`, creates one `steps[]` item per curve point, uses `Step Duration Seconds` for every dwell, sets `tec_power_w` to `0.0` while filling the voltage/current fields, and copies the bath standby and pump safe-state controls into the `safety` block. It is a template generator, not a hardware action; after saving, the JSON can be reviewed, edited, loaded, and run in TEC-only or Unified mode.
 
 
 ## Stage 4 manual verification checklist (GUI integration)
@@ -141,7 +146,7 @@ Expected:
   - `TEC Voltage Curve V (comma-separated)`,
   - `TEC Current Curve A (comma-separated)`,
   - `Step Duration Seconds`,
-  and a **Build Unified Example** button that writes a unified JSON with both curves.
+  and a **Build Unified Example JSON** button that writes a shared starter JSON by combining the three curve fields point-by-point.
 - Requested-input preview uses separate subplots for TEC requested power and Huber requested temperature, gracefully handles JSONs that only include one request type, and unified runs will skip connecting to devices with no requested setpoints in the loaded JSON.
 
 ### 2) Verify TEC-only mode (legacy flow preserved)

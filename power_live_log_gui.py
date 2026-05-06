@@ -173,7 +173,7 @@ class LiveLoggerGui:
         Entry(io_frame, textvariable=self.current_curve_a, width=42).grid(row=9, column=1, columnspan=4, sticky='we')
         Label(io_frame, text='Step Duration Seconds').grid(row=10, column=0, sticky='w')
         Entry(io_frame, textvariable=self.step_duration_s, width=16).grid(row=10, column=1, sticky='w')
-        Label(io_frame, text='Build Unified Example JSON uses the Huber/TEC curve fields as a starter config.').grid(row=10, column=2, columnspan=3, sticky='w')
+        Label(io_frame, text='Build Unified Example JSON saves a starter shared JSON from the Huber temp and TEC V/I curves; it does not start hardware.').grid(row=10, column=2, columnspan=3, sticky='w')
 
         self.status_indicator_label = Label(top, textvariable=self.status_indicator_text, fg='goldenrod', font=('TkDefaultFont', 12, 'bold'))
         self.status_indicator_label.grid(row=1, column=0, sticky='w', pady=(6, 0))
@@ -307,19 +307,23 @@ class LiveLoggerGui:
 
     def _validate_mode_compatibility(self, content: dict, requested_mode: str) -> str | None:
         if requested_mode == "Unified":
-            if not looks_like_unified_run_config(content):
-                return "Unified mode requires a JSON with unified TEC + Huber steps (for example bath_setpoint_c, tec_power_w, and duration_s)."
+            has_shared_or_legacy_shape = (
+                looks_like_unified_run_config(content)
+                or isinstance(content.get("power_schedule"), list)
+                or bool(legacy_tec_steps_to_power_schedule(content))
+            )
+            if not has_shared_or_legacy_shape:
+                return "Unified mode requires shared steps or legacy TEC power_schedule entries."
             return None
         if requested_mode == "TEC-only":
-            if looks_like_unified_run_config(content):
-                return "TEC-only mode cannot run unified TEC + Huber JSON. Open unified JSON files in Unified mode."
-            has_legacy_shape = (
+            has_tec_shape = (
                 isinstance(content.get("power_schedule"), list)
                 or bool(legacy_tec_steps_to_power_schedule(content))
                 or "transport" in content
+                or looks_like_unified_run_config(content)
             )
-            if not has_legacy_shape:
-                return "TEC-only mode expects a live logger config (e.g. power_schedule/transport fields) or older TEC calibration steps."
+            if not has_tec_shape:
+                return "TEC-only mode expects shared steps, live logger power_schedule entries, or older TEC calibration steps."
         return None
 
     def _load_requested_input_from_config(self, path_text: str) -> None:
@@ -587,13 +591,14 @@ class LiveLoggerGui:
         self.stop_requested = False
         self.animating = True
         self._schedule_plot_refresh()
-        raw_content = json.loads(Path(path_text).read_text(encoding='utf-8'))
         run_cfg = RunConfig.from_json_file(path_text)
         run_cfg.safety.bath_standby_setpoint_c = float(self.bath_standby_temp_c.get())
         run_cfg.safety.pump_on_in_safe_state = bool(self.pump_safe_on.get())
-        raw_steps = list(raw_content.get('steps') or [])
-        has_any_tec_request = bool(raw_content.get('power_schedule')) or any('tec_power_w' in step for step in raw_steps)
-        has_any_huber_request = any('bath_setpoint_c' in step for step in raw_steps)
+        has_any_tec_request = any(
+            step.tec_power_w is not None or step.tec_voltage_v is not None or step.tec_current_a is not None
+            for step in run_cfg.steps
+        )
+        has_any_huber_request = any(step.bath_setpoint_c is not None for step in run_cfg.steps)
         tec_adapter = TecPowerAdapter(self._build_config()) if has_any_tec_request else NoopTecAdapter()
         bath_adapter = HuberWorkflowAdapter(port=self.huber_port.get().strip() or None) if has_any_huber_request else NoopBathAdapter()
         engine = DualDeviceRunEngine(tec_adapter, bath_adapter, output_directory=self.output_directory.get().strip() or 'live_logs', sample_hz=hz)
