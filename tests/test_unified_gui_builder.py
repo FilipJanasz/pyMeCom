@@ -1,6 +1,4 @@
 import json
-from types import SimpleNamespace
-
 from power_live_log_gui import LiveLoggerGui
 
 
@@ -98,3 +96,38 @@ def test_requested_preview_derives_power_when_legacy_zero_power_has_voltage_curr
 
     assert gui.loaded_schedule_points == [(0.0, 1.0), (10.0, 1.0)]
     assert gui.duration.get() == "10"
+
+
+class FakeListbox:
+    def __init__(self):
+        self.items = []
+        self.selected = []
+
+    def delete(self, start, end):
+        self.items.clear()
+        self.selected.clear()
+
+    def insert(self, end, item):
+        self.items.append(item)
+
+    def selection_set(self, idx):
+        self.selected.append(idx)
+
+
+def test_ole_to_unix_timestamp_uses_shared_constants():
+    assert LiveLoggerGui._ole_to_unix_timestamp(25569.0) == 0.0
+    assert LiveLoggerGui._ole_to_unix_timestamp(25570.0) == 86400.0
+
+
+def test_configure_live_plot_columns_selects_defaults_and_initializes_buffers():
+    gui = LiveLoggerGui.__new__(LiveLoggerGui)
+    gui.columns_list = FakeListbox()
+    gui.selected_cols = []
+    gui.live_data = {}
+
+    gui._configure_live_plot_columns(["bath_temp_c", "tec_actual_power_w", "ignored"], ["tec_actual_power_w", "missing"])
+
+    assert gui.columns_list.items == ["bath_temp_c", "tec_actual_power_w", "ignored"]
+    assert gui.selected_cols == ["tec_actual_power_w"]
+    assert gui.columns_list.selected == [1]
+    assert set(gui.live_data) == {"bath_temp_c", "tec_actual_power_w", "ignored"}

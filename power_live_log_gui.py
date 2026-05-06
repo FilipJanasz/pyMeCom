@@ -27,6 +27,18 @@ except Exception:
 LAST_CONFIG_PATH = Path('.last_live_logger_gui_config')
 MAX_POINTS = 600
 MIN_HZ = 0.1
+OLE_AUTOMATION_UNIX_EPOCH_OFFSET_DAYS = 25569.0
+SECONDS_PER_DAY = 86400.0
+UNIFIED_LIVE_COLUMNS = [
+    'bath_setpoint_c',
+    'bath_temp_c',
+    'bath_current_setpoint_c',
+    'tec_power_w',
+    'tec_actual_power_w',
+    'tec_voltage_v',
+    'tec_current_a',
+]
+UNIFIED_DEFAULT_COLUMNS = ['bath_temp_c', 'tec_actual_power_w', 'bath_setpoint_c', 'tec_power_w']
 
 
 class NoopTecAdapter:
@@ -281,26 +293,34 @@ class LiveLoggerGui:
         path_text = self.config_path.get().strip()
         if not path_text:
             return
-        content = json.loads(Path(path_text).read_text(encoding='utf-8'))
+        try:
+            content = self._read_json_config(path_text)
+        except Exception as exc:
+            messagebox.showerror('Load JSON failed', str(exc))
+            return
         detected_mode = self._detect_mode_from_content(content)
         self.detected_mode.set(detected_mode)
         self.run_mode.set(detected_mode)
-        if detected_mode == "Unified":
-            rcfg = RunConfig.from_dict(content)
-            self.duration.set(str(sum(step.duration_s for step in rcfg.steps)))
-            self.bath_standby_temp_c.set(str(rcfg.safety.bath_standby_setpoint_c))
-            self.pump_safe_on.set(1 if rcfg.safety.pump_on_in_safe_state else 0)
-        else:
-            cfg = LiveLoggerConfig.from_json_file(path_text)
-            self.serial_port.set(cfg.serial_port or '')
-            self.serial_autodetect.set(1 if cfg.serial_port_autodetect else 0)
-            self.serial_hint.set(cfg.serial_port_hint or '')
-            self.address.set(str(cfg.address))
-            self.channel.set(str(cfg.channel))
-            self.duration.set('' if cfg.duration_seconds is None else str(cfg.duration_seconds))
-            self.hz.set(str(cfg.acquisition_hz))
-            self.output_directory.set(cfg.output_directory)
-            self.output_prefix.set(cfg.output_prefix)
+        try:
+            if detected_mode == "Unified":
+                rcfg = RunConfig.from_dict(content)
+                self.duration.set(str(sum(step.duration_s for step in rcfg.steps)))
+                self.bath_standby_temp_c.set(str(rcfg.safety.bath_standby_setpoint_c))
+                self.pump_safe_on.set(1 if rcfg.safety.pump_on_in_safe_state else 0)
+            else:
+                cfg = LiveLoggerConfig.from_json_file(path_text)
+                self.serial_port.set(cfg.serial_port or '')
+                self.serial_autodetect.set(1 if cfg.serial_port_autodetect else 0)
+                self.serial_hint.set(cfg.serial_port_hint or '')
+                self.address.set(str(cfg.address))
+                self.channel.set(str(cfg.channel))
+                self.duration.set('' if cfg.duration_seconds is None else str(cfg.duration_seconds))
+                self.hz.set(str(cfg.acquisition_hz))
+                self.output_directory.set(cfg.output_directory)
+                self.output_prefix.set(cfg.output_prefix)
+        except Exception as exc:
+            messagebox.showerror('Load JSON failed', str(exc))
+            return
         self._load_requested_input_from_config(path_text)
         self._remember_last_config_path(path_text)
 
@@ -308,6 +328,30 @@ class LiveLoggerGui:
         if looks_like_unified_run_config(content):
             return "Unified"
         return "TEC-only"
+
+    @staticmethod
+    def _read_json_config(path_text: str) -> dict:
+        content = json.loads(Path(path_text).read_text(encoding='utf-8'))
+        if not isinstance(content, dict):
+            raise ValueError('Top-level JSON content must be an object')
+        return content
+
+    @staticmethod
+    def _ole_to_unix_timestamp(ole_date: float) -> float:
+        return (ole_date - OLE_AUTOMATION_UNIX_EPOCH_OFFSET_DAYS) * SECONDS_PER_DAY
+
+    def _configure_live_plot_columns(self, columns: list[str], default_columns: list[str]) -> None:
+        self.columns_list.delete(0, END)
+        for column in columns:
+            self.columns_list.insert(END, column)
+        if not self.selected_cols:
+            self.selected_cols = [column for column in default_columns if column in columns]
+        if not self.selected_cols and columns:
+            self.selected_cols = [columns[0]]
+        for idx, column in enumerate(columns):
+            if column in self.selected_cols:
+                self.columns_list.selection_set(idx)
+            self.live_data.setdefault(column, deque(maxlen=MAX_POINTS))
 
     def _validate_mode_compatibility(self, content: dict, requested_mode: str) -> str | None:
         if requested_mode == "Unified":
@@ -336,7 +380,7 @@ class LiveLoggerGui:
         self.loaded_power_schedule = []
         total_duration = 0.0
         try:
-            content = json.loads(Path(path_text).read_text(encoding='utf-8'))
+            content = self._read_json_config(path_text)
             schedule = content.get('power_schedule') or legacy_tec_steps_to_power_schedule(content)
             unified_steps = content.get('steps', []) if looks_like_unified_run_config(content) else []
             self.loaded_power_schedule = list(schedule)
@@ -551,9 +595,10 @@ class LiveLoggerGui:
             return
         if path_text:
             try:
-                content = json.loads(Path(path_text).read_text(encoding='utf-8'))
-            except Exception:
-                content = {}
+                content = self._read_json_config(path_text)
+            except Exception as exc:
+                messagebox.showerror('Load JSON failed', str(exc))
+                return
             selected_mode = self.run_mode_selection.get()
             effective_mode = selected_mode if selected_mode != 'Auto' else self._detect_mode_from_content(content)
             mode_error = self._validate_mode_compatibility(content, effective_mode)
@@ -566,20 +611,12 @@ class LiveLoggerGui:
                 return
         cfg = self._build_config()
         self._set_controller_status('yellow', 'Controller status: connecting (starting logger)')
-        self.columns_list.delete(0, END)
-        for spec in cfg.parameters:
-            self.columns_list.insert(END, spec.label)
-
-        if not self.selected_cols:
-            default_col = next((spec.label for spec in cfg.parameters if 'act u' in spec.label.lower()), cfg.parameters[0].label)
-            self.selected_cols = [default_col]
+        parameter_columns = [spec.label for spec in cfg.parameters]
+        default_col = next((label for label in parameter_columns if 'act u' in label.lower()), parameter_columns[0])
+        self._configure_live_plot_columns(parameter_columns, [default_col])
         if not self.second_plot_cols:
-            default_second = [spec.label for spec in cfg.parameters if spec.label.startswith('1046.1:') or spec.label.startswith('1046.2:')]
-            self.second_plot_cols = default_second[:2]
-        for idx, spec in enumerate(cfg.parameters):
-            if spec.label in self.selected_cols:
-                self.columns_list.selection_set(idx)
-        for col in self.selected_cols + self.second_plot_cols:
+            self.second_plot_cols = [label for label in parameter_columns if label.startswith('1046.1:') or label.startswith('1046.2:')][:2]
+        for col in self.second_plot_cols:
             self.live_data.setdefault(col, deque(maxlen=MAX_POINTS))
 
         self.animating = True
@@ -592,7 +629,7 @@ class LiveLoggerGui:
         def on_row(row: dict[str, object]) -> None:
             t = row.get('OLE Automation Date')
             if isinstance(t, (float, int)):
-                unix_ts = (float(t) - 25569.0) * 86400.0
+                unix_ts = self._ole_to_unix_timestamp(float(t))
                 self.sample_index.append(unix_ts)
                 if self._last_sample_ts is not None and unix_ts > self._last_sample_ts:
                     measured = 1.0 / (unix_ts - self._last_sample_ts)
@@ -626,7 +663,7 @@ class LiveLoggerGui:
                 )
             except Exception as exc:
                 error_message = self._format_run_error(exc)
-                self.root.after(0, lambda: self._set_controller_status('red', f'Controller status: not detected ({exc})'))
+                self.root.after(0, lambda e=exc: self._set_controller_status('red', f'Controller status: not detected ({e})'))
                 self.root.after(0, lambda msg=error_message: messagebox.showerror('Run failed', msg))
             finally:
                 self.animating = False
@@ -639,11 +676,16 @@ class LiveLoggerGui:
     def _start_unified_run(self, path_text: str, hz: float) -> None:
         self.run_mode.set('Unified')
         self.stop_requested = False
+        try:
+            run_cfg = RunConfig.from_json_file(path_text)
+            run_cfg.safety.bath_standby_setpoint_c = float(self.bath_standby_temp_c.get())
+        except Exception as exc:
+            messagebox.showerror('Unified config invalid', str(exc))
+            return
+        run_cfg.safety.pump_on_in_safe_state = bool(self.pump_safe_on.get())
+        self._configure_live_plot_columns(UNIFIED_LIVE_COLUMNS, UNIFIED_DEFAULT_COLUMNS)
         self.animating = True
         self._schedule_plot_refresh()
-        run_cfg = RunConfig.from_json_file(path_text)
-        run_cfg.safety.bath_standby_setpoint_c = float(self.bath_standby_temp_c.get())
-        run_cfg.safety.pump_on_in_safe_state = bool(self.pump_safe_on.get())
         has_any_tec_request = any(
             step.tec_power_w is not None or step.tec_voltage_v is not None or step.tec_current_a is not None
             for step in run_cfg.steps
@@ -658,13 +700,18 @@ class LiveLoggerGui:
             state = str(evt.get("next_state") or evt.get("state") or "")
             self.root.after(0, lambda s=state: self.status_text.set(f'Engine state: {s}'))
             if evt.get("event") == "state_transition" and evt.get("next_state") == "ERROR":
-                self.root.after(0, lambda: self._set_controller_status('red', f'Controller status: error ({evt.get("error", "unknown")})'))
+                error = str(evt.get('error', 'unknown'))
+                self.root.after(0, lambda err=error: self._set_controller_status('red', f'Controller status: error ({err})'))
 
         def on_row(row: dict[str, object]) -> None:
             t = row.get('OLE Automation Date')
             if isinstance(t, (float, int)):
-                unix_ts = (float(t) - 25569.0) * 86400.0
+                unix_ts = self._ole_to_unix_timestamp(float(t))
                 self.sample_index.append(unix_ts)
+                if self._last_sample_ts is not None and unix_ts > self._last_sample_ts:
+                    measured = 1.0 / (unix_ts - self._last_sample_ts)
+                    self.root.after(0, lambda m=measured: self.sample_rate_text.set(f'Measured acquisition rate: {m:.2f} Hz'))
+                self._last_sample_ts = unix_ts
             else:
                 self.sample_index.append(datetime.now(timezone.utc).timestamp())
             for k, v in row.items():
@@ -676,12 +723,12 @@ class LiveLoggerGui:
 
         def worker() -> None:
             try:
-                self._set_controller_status('yellow', 'Controller status: connecting (unified run)')
+                self.root.after(0, lambda: self._set_controller_status('yellow', 'Controller status: connecting (unified run)'))
                 paths = engine.run(run_cfg, legacy_power_policy=LegacyPowerPolicy.ALLOW_ZERO_POWER.value, event_callback=on_event, row_callback=on_row)
                 self.root.after(0, lambda p=paths.csv_path.name: self._set_controller_status('green', f'Controller status: unified run complete ({p})'))
             except Exception as exc:
-                self.root.after(0, lambda: self._set_controller_status('red', f'Controller status: unified run failed ({exc})'))
-                self.root.after(0, lambda: messagebox.showerror('Unified run failed', str(exc)))
+                self.root.after(0, lambda e=exc: self._set_controller_status('red', f'Controller status: unified run failed ({e})'))
+                self.root.after(0, lambda e=exc: messagebox.showerror('Unified run failed', str(e)))
             finally:
                 self.animating = False
                 self.unified_engine = None
