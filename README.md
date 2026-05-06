@@ -5,8 +5,8 @@ A Python interface for the MeCom protocol by Meerstetter, with workflow tooling 
 
 ## GUI entry points
 
-- **TEC-only live logger GUI:** run `python power_live_log_tec_gui.py` to use the standalone Meerstetter TEC logger workflow without Huber or unified-run controls. This is the recommended GUI while the unified workflow is being debugged.
-- **Unified TEC + Huber GUI:** run `python power_live_log_gui.py` for the combined bath/TEC scheduler and unified log workflow.
+- **TEC-only live logger GUI:** run `python power_live_log_tec_gui.py` to use the standalone Meerstetter TEC logger workflow without Huber or unified-run controls. This is the recommended GUI while the unified workflow is being debugged. It accepts legacy live-logger JSON with `power_schedule` and older TEC calibration JSON with top-level `steps` that use fields such as `dwell_seconds`, `set_voltage`, `set_current`, `power`, and `enable_output`.
+- **Unified TEC + Huber GUI:** run `python power_live_log_gui.py` for the combined bath/TEC scheduler and unified log workflow. Its TEC-only mode accepts the same legacy TEC formats as the standalone TEC GUI; true unified JSON is detected only when `steps[]` contains unified fields such as `bath_setpoint_c`, `tec_power_w`, `duration_s`, progression/stability fields, or a unified `safety` block.
 
 ## New integration direction: TEC + Huber unified calibration app
 
@@ -109,7 +109,9 @@ Explicit mapping behavior:
 
 This allows incremental migration while keeping existing TEC-only configs usable for schema parsing.
 
-See `examples/unified_run_config.example.json` for a unified example.
+For the TEC-only live logger GUI, older TEC calibration `steps[]` entries are converted into `power_schedule[]` entries. The conversion preserves `name`, `power`, `set_voltage`, `set_current`, and `enable_output`, and maps `dwell_seconds` (or `duration_seconds`) to `duration_seconds` for preview and live logger execution.
+
+See `examples/unified_run_config.example.json` for a unified example. In that file, each `steps[]` item is a coordinated TEC + Huber action: `bath_setpoint_c` is the Huber bath setpoint, `tec_power_w` is the TEC requested power, and `duration_s` is how long the run engine dwells before advancing. The second example step uses `progression_mode: "stability"` with stability fields as a Phase-2 template; the current MVP remains time-based unless stability progression is explicitly enabled in the run engine. The top-level `safety` block defines what the engine should do on stop/error: zero or safe TEC output, return the bath to standby, and apply the pump safe state.
 
 
 ## Stage 4 manual verification checklist (GUI integration)
@@ -144,7 +146,7 @@ Expected:
 
 ### 2) Verify TEC-only mode (legacy flow preserved)
 
-1. Load a legacy TEC JSON containing `power_schedule` (for example `examples/power_live_log_com.example.json`).
+1. Load a legacy TEC JSON containing `power_schedule` (for example `examples/power_live_log_com.example.json`) or an older TEC calibration JSON containing top-level TEC `steps` (for example `examples/tec1161_calibration_config.example.json`).
 2. Confirm preview reflects TEC schedule intent.
 3. Start run, observe live telemetry and status updates.
 4. Stop run with **Force Stop**.

@@ -9,7 +9,7 @@ from dataclasses import asdict
 from pathlib import Path
 from tkinter import BOTH, END, LEFT, RIGHT, VERTICAL, Button, Checkbutton, Entry, Frame, IntVar, Label, Listbox, Radiobutton, Scrollbar, StringVar, Tk, filedialog, messagebox
 
-from workflows.automation.common.live_logger import CalibrationStep, LiveLogger, LiveLoggerConfig, PowerScheduleStep, SafeChannelController, default_live_parameters
+from workflows.automation.common.live_logger import CalibrationStep, LiveLogger, LiveLoggerConfig, PowerScheduleStep, SafeChannelController, default_live_parameters, legacy_tec_steps_to_power_schedule, looks_like_unified_run_config
 from workflows.automation.common.run_config import RunConfig
 from workflows.automation.common.run_engine import DualDeviceRunEngine, LegacyPowerPolicy
 from workflows.automation.common.tec_adapter import TecPowerAdapter
@@ -301,21 +301,25 @@ class LiveLoggerGui:
         self._remember_last_config_path(path_text)
 
     def _detect_mode_from_content(self, content: dict) -> str:
-        steps = content.get("steps")
-        if isinstance(steps, list) and steps:
+        if looks_like_unified_run_config(content):
             return "Unified"
         return "TEC-only"
 
     def _validate_mode_compatibility(self, content: dict, requested_mode: str) -> str | None:
         if requested_mode == "Unified":
-            steps = content.get("steps")
-            if not isinstance(steps, list) or not steps:
-                return "Unified mode requires a JSON with non-empty top-level 'steps'."
+            if not looks_like_unified_run_config(content):
+                return "Unified mode requires a JSON with unified TEC + Huber steps (for example bath_setpoint_c, tec_power_w, and duration_s)."
             return None
         if requested_mode == "TEC-only":
-            has_legacy_shape = isinstance(content.get("power_schedule"), list) or "transport" in content
+            if looks_like_unified_run_config(content):
+                return "TEC-only mode cannot run unified TEC + Huber JSON. Open unified JSON files in Unified mode."
+            has_legacy_shape = (
+                isinstance(content.get("power_schedule"), list)
+                or bool(legacy_tec_steps_to_power_schedule(content))
+                or "transport" in content
+            )
             if not has_legacy_shape:
-                return "TEC-only mode expects a live logger config (e.g. power_schedule/transport fields)."
+                return "TEC-only mode expects a live logger config (e.g. power_schedule/transport fields) or older TEC calibration steps."
         return None
 
     def _load_requested_input_from_config(self, path_text: str) -> None:
@@ -325,8 +329,8 @@ class LiveLoggerGui:
         total_duration = 0.0
         try:
             content = json.loads(Path(path_text).read_text(encoding='utf-8'))
-            schedule = content.get('power_schedule', [])
-            unified_steps = content.get('steps', [])
+            schedule = content.get('power_schedule') or legacy_tec_steps_to_power_schedule(content)
+            unified_steps = content.get('steps', []) if looks_like_unified_run_config(content) else []
             self.loaded_power_schedule = list(schedule)
             t = 0.0
             detected_mode = self._detect_mode_from_content(content)
