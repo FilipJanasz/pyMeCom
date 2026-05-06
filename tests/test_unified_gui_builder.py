@@ -131,3 +131,27 @@ def test_configure_live_plot_columns_selects_defaults_and_initializes_buffers():
     assert gui.selected_cols == ["tec_actual_power_w"]
     assert gui.columns_list.selected == [1]
     assert set(gui.live_data) == {"bath_temp_c", "tec_actual_power_w", "ignored"}
+
+
+class FakePortInfo:
+    def __init__(self, device, description="", hwid=""):
+        self.device = device
+        self.description = description
+        self.hwid = hwid
+
+
+def test_format_serial_port_choices_shows_device_description_and_hwid():
+    choices = LiveLoggerGui._format_serial_port_choices(
+        [
+            FakePortInfo("COM3", "USB Serial Device", "VID:PID=1234:5678"),
+            FakePortInfo("COM4"),
+        ]
+    )
+
+    assert choices == "COM3 - USB Serial Device | VID:PID=1234:5678; COM4"
+
+
+def test_connection_color_supports_separate_detect_indicator_states():
+    assert LiveLoggerGui._connection_color("green") == "forest green"
+    assert LiveLoggerGui._connection_color("red") == "firebrick"
+    assert LiveLoggerGui._connection_color("gray") == "gray50"

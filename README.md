@@ -8,6 +8,11 @@ A Python interface for the MeCom protocol by Meerstetter, with workflow tooling 
 - **TEC-only live logger GUI:** run `python power_live_log_tec_gui.py` to use the standalone Meerstetter TEC logger workflow without Huber controls. It accepts legacy live-logger JSON with `power_schedule`, older TEC calibration JSON with top-level `steps`, and shared step-based JSON; Huber-only fields are ignored by this GUI.
 - **Unified TEC + Huber GUI:** run `python power_live_log_gui.py` for the combined bath/TEC scheduler and unified log workflow. Both TEC-only and Unified run modes accept the same shared step-based JSON. If a loaded step does not request a device (`bath_setpoint_c` for Huber, or `tec_power_w`/`tec_voltage_v`/`tec_current_a` for TEC), that device is not connected or commanded for that run.
 
+
+### Unified GUI connection detection pane
+
+The unified GUI includes a dedicated **Connection Detection** pane with separate TEC and Huber sections. Use **Scan COM Ports** to list available serial ports when automatic detection does not choose the expected device, then type the desired port into the TEC or Huber port field and click the matching **Detect TEC** or **Detect Huber** button. Each device has its own colored indicator and status text so operators can see independently whether the TEC and Huber connection checks passed before starting a TEC-only or Unified run. TEC detection performs a controller address query, then keeps the detected port in the port field and disables TEC serial autodetect for subsequent starts to avoid fragile autodetect ordering. Huber detection reports a warning instead of a green hardware indicator when only the adapter's simulation path is available.
+
 ## New integration direction: TEC + Huber unified calibration app
 
 This repository is being extended to support a single calibration workflow that combines:
