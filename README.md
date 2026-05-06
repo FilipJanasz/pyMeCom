@@ -116,7 +116,7 @@ For the TEC-only live logger GUI, older TEC calibration `steps[]` entries and sh
 
 See `examples/unified_run_config.example.json` for a shared TEC + Huber example. In that file, each `steps[]` item is a coordinated action: `bath_setpoint_c` is the Huber bath setpoint, `tec_power_w` is the TEC requested power, and `duration_s` is how long the run engine dwells before advancing. The second example step uses `progression_mode: "stability"` with stability fields as a Phase-2 template; the current MVP remains time-based unless stability progression is explicitly enabled in the run engine. The top-level `safety` block defines what the engine should do on stop/error: zero or safe TEC output, return the bath to standby, and apply the pump safe state.
 
-The GUI **Build Unified Example JSON** button writes a starter shared JSON file from the editable curve fields in the **Config & Output** section. It zips together `Huber Temp Curve °C`, `TEC Voltage Curve V`, and `TEC Current Curve A`, creates one `steps[]` item per curve point, uses `Step Duration Seconds` for every dwell, sets `tec_power_w` to `0.0` while filling the voltage/current fields, and copies the bath standby and pump safe-state controls into the `safety` block. It is a template generator, not a hardware action; after saving, the JSON can be reviewed, edited, loaded, and run in TEC-only or Unified mode.
+The GUI **Build Unified Example JSON** button is a template generator, not a hardware action. It writes a starter shared JSON file from only the non-empty editable curve fields in the **Config & Output** section: Huber-only, TEC-only, and TEC+Huber templates are all valid. A blank `Huber Temp Curve °C` now means “build a TEC-only shared JSON” instead of injecting a default bath curve. TEC templates require both `TEC Voltage Curve V` and `TEC Current Curve A`; when both Huber and TEC curves are filled, their point counts must match. For TEC V/I points, the generated step preserves `tec_voltage_v` and `tec_current_a` and fills `tec_power_w` as voltage × current so the requested-input preview reflects the requested curve instead of a fake zero-power line. After saving, the JSON can be reviewed, edited, loaded, and run in TEC-only or Unified mode.
 
 
 ## Stage 4 manual verification checklist (GUI integration)
@@ -146,8 +146,8 @@ Expected:
   - `TEC Voltage Curve V (comma-separated)`,
   - `TEC Current Curve A (comma-separated)`,
   - `Step Duration Seconds`,
-  and a **Build Unified Example JSON** button that writes a shared starter JSON by combining the three curve fields point-by-point.
-- Requested-input preview uses separate subplots for TEC requested power and Huber requested temperature, gracefully handles JSONs that only include one request type, and unified runs will skip connecting to devices with no requested setpoints in the loaded JSON.
+  and a **Build Unified Example JSON** button that writes a shared starter JSON from the non-empty curve groups without starting hardware.
+- Requested-input preview uses separate subplots for TEC requested power and Huber requested temperature, derives TEC power from voltage × current when old JSONs contain `tec_power_w: 0.0` with nonzero V/I fields, gracefully handles JSONs that only include one request type, and unified runs will skip connecting to devices with no requested setpoints in the loaded JSON.
 
 ### 2) Verify TEC-only mode (legacy flow preserved)
 
