@@ -9,9 +9,11 @@ A Python interface for the MeCom protocol by Meerstetter, with workflow tooling 
 - **Unified TEC + Huber GUI:** run `python power_live_log_gui.py` for the combined bath/TEC scheduler and unified log workflow. Both TEC-only and Unified run modes accept the same shared step-based JSON. If a loaded step does not request a device (`bath_setpoint_c` for Huber, or `tec_power_w`/`tec_voltage_v`/`tec_current_a` for TEC), that device is not connected or commanded for that run.
 
 
-### Unified GUI connection detection pane
+### Unified GUI connection and runtime panes
 
-The unified GUI includes a dedicated **Connection Detection** pane with separate TEC and Huber sections. Use **Scan COM Ports** to list available serial ports when automatic detection does not choose the expected device, then type the desired port into the TEC or Huber port field and click the matching **Detect TEC** or **Detect Huber** button. Each device has its own colored indicator and status text so operators can see independently whether the TEC and Huber connection checks passed before starting a TEC-only or Unified run. TEC detection performs a controller address query, then keeps the detected port in the port field and disables TEC serial autodetect for subsequent starts to avoid fragile autodetect ordering. Huber detection reports a warning instead of a green hardware indicator when only the adapter's simulation path is available.
+The unified GUI keeps device setup in one top-left **Connection Detection** pane and keeps non-port run settings in a separate **Runtime Options** pane below it. The connection pane has side-by-side TEC and Huber sections with their own port fields, detect buttons, colored indicators, and status text. TEC-specific connection settings such as port, serial hint, autodetect, and address live with TEC detection; the Huber port lives with Huber detection. Runtime-only settings such as run mode, channel, acquisition rate, duration, bath standby temperature, and pump safe state are no longer mixed into the connection controls.
+
+Use **Scan COM Ports** when automatic detection does not choose the expected device. The scan result now shows one COM device per line in the popup and a short summary in the pane, with guidance to copy a COM name such as `COM3` into the TEC or Huber port field before clicking **Detect TEC** or **Detect Huber**. TEC detection performs a controller address query, then keeps the detected port in the port field and disables TEC serial autodetect for subsequent starts to avoid fragile autodetect ordering. Huber detection reports a warning instead of a green hardware indicator when only the adapter's simulation path is available.
 
 ## New integration direction: TEC + Huber unified calibration app
 

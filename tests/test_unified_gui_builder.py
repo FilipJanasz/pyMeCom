@@ -148,7 +148,21 @@ def test_format_serial_port_choices_shows_device_description_and_hwid():
         ]
     )
 
-    assert choices == "COM3 - USB Serial Device | VID:PID=1234:5678; COM4"
+    assert choices == "COM3 — USB Serial Device | VID:PID=1234:5678\nCOM4"
+
+
+def test_summarize_serial_port_choices_explains_how_to_use_ports():
+    summary = LiveLoggerGui._summarize_serial_port_choices(
+        [
+            FakePortInfo("COM3", "USB Serial Device", "VID:PID=1234:5678"),
+            FakePortInfo("COM4", "Bluetooth Serial"),
+        ]
+    )
+
+    assert summary == (
+        "COM scan: found 2 port(s): COM3 (USB Serial Device), COM4 (Bluetooth Serial). "
+        "Copy a COM name into the TEC or Huber Port field, then click Detect."
+    )
 
 
 def test_connection_color_supports_separate_detect_indicator_states():
