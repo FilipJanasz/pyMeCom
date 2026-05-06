@@ -43,6 +43,9 @@ UNIFIED_LIVE_COLUMNS = [
     'tec_current_a',
 ]
 UNIFIED_DEFAULT_COLUMNS = ['bath_temp_c', 'tec_actual_power_w', 'bath_setpoint_c', 'tec_power_w']
+CONNECTION_STATUS_WRAP_PX = 360
+CONNECTION_STATUS_MAX_CHARS = 118
+COM_SCAN_SUMMARY_WRAP_PX = 720
 
 
 class NoopTecAdapter:
@@ -155,6 +158,15 @@ class LiveLoggerGui:
             Label(parent, text=label).grid(row=row, column=0, sticky='w')
             Entry(parent, textvariable=var, width=width).grid(row=row, column=1, sticky='we')
 
+        def add_status_label(parent: Frame, var, row: int, column: int, columnspan: int = 1):
+            Label(
+                parent,
+                textvariable=var,
+                justify=LEFT,
+                anchor='w',
+                wraplength=CONNECTION_STATUS_WRAP_PX,
+            ).grid(row=row, column=column, columnspan=columnspan, sticky='we')
+
         conn_frame = Frame(top, padx=4, pady=4, relief='groove', bd=1)
         conn_frame.grid(row=0, column=0, sticky='nsew', padx=(0, 4))
         runtime_frame = Frame(top, padx=4, pady=4, relief='groove', bd=1)
@@ -178,7 +190,7 @@ class LiveLoggerGui:
         Label(tec_detect_frame, text='TEC connection', font=('TkDefaultFont', 9, 'bold')).grid(row=0, column=0, columnspan=3, sticky='w')
         self.tec_connection_indicator_label = Label(tec_detect_frame, textvariable=self.tec_connection_indicator_text, fg='gray50', font=('TkDefaultFont', 12, 'bold'))
         self.tec_connection_indicator_label.grid(row=1, column=0, sticky='w')
-        Label(tec_detect_frame, textvariable=self.tec_connection_text).grid(row=1, column=1, columnspan=2, sticky='w')
+        add_status_label(tec_detect_frame, self.tec_connection_text, row=1, column=1, columnspan=2)
         Label(tec_detect_frame, text='Port').grid(row=2, column=0, sticky='w')
         Entry(tec_detect_frame, textvariable=self.serial_port, width=24).grid(row=2, column=1, sticky='we')
         Checkbutton(tec_detect_frame, text='Autodetect if blank', variable=self.serial_autodetect).grid(row=2, column=2, sticky='w')
@@ -192,12 +204,12 @@ class LiveLoggerGui:
         Label(huber_detect_frame, text='Huber connection', font=('TkDefaultFont', 9, 'bold')).grid(row=0, column=0, columnspan=3, sticky='w')
         self.huber_connection_indicator_label = Label(huber_detect_frame, textvariable=self.huber_connection_indicator_text, fg='gray50', font=('TkDefaultFont', 12, 'bold'))
         self.huber_connection_indicator_label.grid(row=1, column=0, sticky='w')
-        Label(huber_detect_frame, textvariable=self.huber_connection_text).grid(row=1, column=1, columnspan=2, sticky='w')
+        add_status_label(huber_detect_frame, self.huber_connection_text, row=1, column=1, columnspan=2)
         Label(huber_detect_frame, text='Port').grid(row=2, column=0, sticky='w')
         Entry(huber_detect_frame, textvariable=self.huber_port, width=24).grid(row=2, column=1, sticky='we')
         Button(huber_detect_frame, text='Scan COM Ports', command=self.scan_serial_ports).grid(row=3, column=0, sticky='w')
         Button(huber_detect_frame, text='Detect Huber', command=self.detect_huber).grid(row=3, column=1, sticky='w')
-        Label(conn_frame, textvariable=self.available_ports_text, justify=LEFT, wraplength=720).grid(row=2, column=0, columnspan=2, sticky='w', pady=(4, 0))
+        Label(conn_frame, textvariable=self.available_ports_text, justify=LEFT, anchor='w', wraplength=COM_SCAN_SUMMARY_WRAP_PX).grid(row=2, column=0, columnspan=2, sticky='we', pady=(4, 0))
 
         self.status_indicator_label = Label(runtime_frame, textvariable=self.status_indicator_text, fg='goldenrod', font=('TkDefaultFont', 12, 'bold'))
         self.status_indicator_label.grid(row=1, column=0, sticky='w', pady=(6, 0))
@@ -958,6 +970,13 @@ class LiveLoggerGui:
             messagebox.showerror('Zero output failed', str(exc))
 
     @staticmethod
+    def _clip_status_text(text: str, max_chars: int = CONNECTION_STATUS_MAX_CHARS) -> str:
+        normalized = ' '.join(str(text).split())
+        if len(normalized) <= max_chars:
+            return normalized
+        return normalized[: max_chars - 1].rstrip() + '…'
+
+    @staticmethod
     def _format_serial_port_choices(port_infos) -> str:
         rows = []
         for port in port_infos:
@@ -1079,11 +1098,11 @@ class LiveLoggerGui:
 
     def _set_tec_connection_status(self, state: str, text: str) -> None:
         self.tec_connection_indicator_label.configure(fg=self._connection_color(state))
-        self.tec_connection_text.set(text)
+        self.tec_connection_text.set(self._clip_status_text(text))
 
     def _set_huber_connection_status(self, state: str, text: str) -> None:
         self.huber_connection_indicator_label.configure(fg=self._connection_color(state))
-        self.huber_connection_text.set(text)
+        self.huber_connection_text.set(self._clip_status_text(text))
 
 
 def main() -> int:

@@ -165,6 +165,16 @@ def test_summarize_serial_port_choices_explains_how_to_use_ports():
     )
 
 
+
+def test_connection_status_text_is_clipped_for_wrapping_labels():
+    long_text = "TEC: " + "very long diagnostic detail " * 20
+    clipped = LiveLoggerGui._clip_status_text(long_text, max_chars=80)
+
+    assert len(clipped) == 80
+    assert clipped.endswith("…")
+    assert "\n" not in clipped
+
+
 def test_connection_color_supports_separate_detect_indicator_states():
     assert LiveLoggerGui._connection_color("green") == "forest green"
     assert LiveLoggerGui._connection_color("red") == "firebrick"
