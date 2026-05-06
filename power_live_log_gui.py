@@ -94,7 +94,7 @@ class LiveLoggerGui:
         self.run_mode = StringVar(value='TEC-only')
         self.run_mode_selection = StringVar(value='Auto')
         self.detected_mode = StringVar(value='TEC-only')
-        self.huber_curve_c = StringVar(value='25,30,35,30,25')
+        self.huber_curve_c = StringVar(value='')
         self.voltage_curve_v = StringVar(value='0.5,1.0,1.5,1.0,0.5')
         self.current_curve_a = StringVar(value='0.2,0.2,0.25,0.2,0.2')
         self.step_duration_s = StringVar(value='60')
@@ -173,7 +173,7 @@ class LiveLoggerGui:
         Entry(io_frame, textvariable=self.current_curve_a, width=42).grid(row=9, column=1, columnspan=4, sticky='we')
         Label(io_frame, text='Step Duration Seconds').grid(row=10, column=0, sticky='w')
         Entry(io_frame, textvariable=self.step_duration_s, width=16).grid(row=10, column=1, sticky='w')
-        Label(io_frame, text='Build Unified Example JSON saves a starter shared JSON from the Huber temp and TEC V/I curves; it does not start hardware.').grid(row=10, column=2, columnspan=3, sticky='w')
+        Label(io_frame, text='Build Unified Example JSON is a template generator: it uses only non-empty curve fields and does not start hardware.').grid(row=10, column=2, columnspan=3, sticky='w')
 
         self.status_indicator_label = Label(top, textvariable=self.status_indicator_text, fg='goldenrod', font=('TkDefaultFont', 12, 'bold'))
         self.status_indicator_label.grid(row=1, column=0, sticky='w', pady=(6, 0))
@@ -257,10 +257,14 @@ class LiveLoggerGui:
             step if isinstance(step, PowerScheduleStep) else PowerScheduleStep.from_dict(step)
             for step in self.loaded_power_schedule
         ]
+        serial_port = self.serial_port.get().strip() or None
+        # Match the standalone TEC GUI's practical behavior for TEC runs: if no
+        # explicit port is filled in, let the common TEC logger resolve one.
+        serial_autodetect = bool(self.serial_autodetect.get()) or serial_port is None
         return LiveLoggerConfig(
             transport='com',
-            serial_port=self.serial_port.get().strip() or None,
-            serial_port_autodetect=bool(self.serial_autodetect.get()),
+            serial_port=serial_port,
+            serial_port_autodetect=serial_autodetect,
             serial_port_hint=self.serial_hint.get().strip() or None,
             address=int(self.address.get()),
             channel=int(self.channel.get()),
@@ -343,16 +347,15 @@ class LiveLoggerGui:
             if unified_steps:
                 for step in unified_steps:
                     duration = float(step.get('duration_s', 0.0) or 0.0)
-                    tec_power_raw = step.get('tec_power_w')
+                    tec_power = self._tec_preview_power_from_step(step)
                     bath_temp_raw = step.get('bath_setpoint_c')
-                    if tec_power_raw is not None:
-                        tec_power = float(tec_power_raw)
+                    if tec_power is not None:
                         self.loaded_schedule_points.append((t, tec_power))
                     if bath_temp_raw is not None:
                         bath_temp = float(bath_temp_raw)
                         self.loaded_temp_schedule_points.append((t, bath_temp))
                     t += duration
-                    if tec_power_raw is not None:
+                    if tec_power is not None:
                         self.loaded_schedule_points.append((t, tec_power))
                     if bath_temp_raw is not None:
                         self.loaded_temp_schedule_points.append((t, bath_temp))
@@ -372,44 +375,80 @@ class LiveLoggerGui:
             self.duration.set(f'{total_duration:g}')
         self._redraw_requested_input_plot()
 
-    def _parse_curve_values(self, text: str, name: str) -> list[float]:
+    def _parse_curve_values(self, text: str, name: str, *, required: bool = True) -> list[float]:
         parts = [p.strip() for p in text.split(',') if p.strip()]
         if not parts:
-            raise ValueError(f'{name} is empty')
+            if required:
+                raise ValueError(f'{name} is empty')
+            return []
         return [float(p) for p in parts]
 
-    def save_unified_example_config(self) -> None:
-        path_text = self.config_path.get().strip() or filedialog.asksaveasfilename(defaultextension='.json', filetypes=[('JSON files', '*.json')])
-        if not path_text:
-            return
-        self.config_path.set(path_text)
-        try:
-            temps = self._parse_curve_values(self.huber_curve_c.get(), 'Huber temperature curve')
-            volts = self._parse_curve_values(self.voltage_curve_v.get(), 'TEC voltage curve')
-            currents = self._parse_curve_values(self.current_curve_a.get(), 'TEC current curve')
-            if len(temps) != len(volts) or len(temps) != len(currents):
-                raise ValueError('Huber temperature, TEC voltage, and TEC current curves must have the same number of points')
-            step_duration = float(self.step_duration_s.get())
-            if step_duration <= 0:
-                raise ValueError('Step duration must be > 0')
-        except ValueError as exc:
-            messagebox.showerror('Invalid curve input', str(exc))
-            return
+    @staticmethod
+    def _tec_preview_power_from_step(step: dict) -> float | None:
+        tec_power_raw = step.get('tec_power_w')
+        voltage_raw = step.get('tec_voltage_v', step.get('set_voltage'))
+        current_raw = step.get('tec_current_a', step.get('set_current'))
+        if voltage_raw is not None and current_raw is not None:
+            try:
+                derived_power = float(voltage_raw) * float(current_raw)
+            except (TypeError, ValueError):
+                derived_power = None
+            if derived_power is not None:
+                try:
+                    explicit_power = None if tec_power_raw is None else float(tec_power_raw or 0.0)
+                except (TypeError, ValueError):
+                    explicit_power = None
+                if explicit_power is None or explicit_power == 0.0:
+                    return derived_power
+        if tec_power_raw is not None:
+            return float(tec_power_raw)
+        return None
+
+    def _build_unified_example_payload(self) -> dict:
+        temps = self._parse_curve_values(self.huber_curve_c.get(), 'Huber temperature curve', required=False)
+        volts = self._parse_curve_values(self.voltage_curve_v.get(), 'TEC voltage curve', required=False)
+        currents = self._parse_curve_values(self.current_curve_a.get(), 'TEC current curve', required=False)
+        has_huber_curve = bool(temps)
+        has_voltage_curve = bool(volts)
+        has_current_curve = bool(currents)
+        if has_voltage_curve != has_current_curve:
+            raise ValueError('TEC voltage and TEC current curves must both be filled or both be blank')
+        has_tec_curve = has_voltage_curve and has_current_curve
+        if not has_huber_curve and not has_tec_curve:
+            raise ValueError('Fill at least one curve: Huber temperature, or TEC voltage/current')
+        if has_tec_curve and len(volts) != len(currents):
+            raise ValueError('TEC voltage and TEC current curves must have the same number of points')
+        if has_huber_curve and has_tec_curve and len(temps) != len(volts):
+            raise ValueError('Huber and TEC curves must have the same number of points when both are filled')
+        point_count = len(temps) if has_huber_curve else len(volts)
+        step_duration = float(self.step_duration_s.get())
+        if step_duration <= 0:
+            raise ValueError('Step duration must be > 0')
+
         steps = []
-        for idx, (temp_c, volt_v, current_a) in enumerate(zip(temps, volts, currents), start=1):
-            steps.append(
-                {
-                    'name': f'curve_step_{idx}',
-                    'bath_setpoint_c': temp_c,
-                    'tec_power_w': 0.0,
-                    'duration_s': step_duration,
-                    'progression_mode': 'time',
-                    'tec_voltage_v': volt_v,
-                    'tec_current_a': current_a,
-                }
-            )
-        payload = {
-            'run_name': 'gui_unified_curve_example',
+        for idx in range(point_count):
+            step = {
+                'name': f'curve_step_{idx + 1}',
+                'duration_s': step_duration,
+                'progression_mode': 'time',
+            }
+            if has_huber_curve:
+                step['bath_setpoint_c'] = temps[idx]
+            if has_tec_curve:
+                volt_v = volts[idx]
+                current_a = currents[idx]
+                step['tec_power_w'] = volt_v * current_a
+                step['tec_voltage_v'] = volt_v
+                step['tec_current_a'] = current_a
+            steps.append(step)
+
+        run_name_parts = []
+        if has_tec_curve:
+            run_name_parts.append('tec')
+        if has_huber_curve:
+            run_name_parts.append('huber')
+        return {
+            'run_name': f"gui_{'_'.join(run_name_parts)}_curve_template",
             'steps': steps,
             'safety': {
                 'tec_power_w_on_stop': 0.0,
@@ -417,6 +456,17 @@ class LiveLoggerGui:
                 'pump_on_in_safe_state': bool(self.pump_safe_on.get()),
             },
         }
+
+    def save_unified_example_config(self) -> None:
+        path_text = self.config_path.get().strip() or filedialog.asksaveasfilename(defaultextension='.json', filetypes=[('JSON files', '*.json')])
+        if not path_text:
+            return
+        self.config_path.set(path_text)
+        try:
+            payload = self._build_unified_example_payload()
+        except ValueError as exc:
+            messagebox.showerror('Invalid curve input', str(exc))
+            return
         with open(path_text, 'w', encoding='utf-8') as handle:
             json.dump(payload, handle, indent=2)
             handle.write('\n')
@@ -789,7 +839,12 @@ class LiveLoggerGui:
         try:
             self._set_controller_status('yellow', 'Controller status: connecting (detecting TEC)')
             logger = LiveLogger(self._build_config())
-            _, endpoint = logger._open_session()
+            session_manager, endpoint = logger._open_session()
+            if endpoint:
+                self.serial_port.set(str(endpoint))
+                self.serial_autodetect.set(1)
+            with session_manager:
+                pass
             self._set_controller_status('green', f'Controller status: connected ({endpoint})')
         except Exception as exc:
             self._set_controller_status('red', f'Controller status: not detected ({exc})')
