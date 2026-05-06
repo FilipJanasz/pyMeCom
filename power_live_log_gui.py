@@ -147,76 +147,31 @@ class LiveLoggerGui:
         top = Frame(self.root, padx=8, pady=8)
         top.pack(fill=BOTH)
         top.grid_columnconfigure(0, weight=1)
-        top.grid_columnconfigure(1, weight=1)
+        top.grid_columnconfigure(1, weight=2)
+        top.grid_rowconfigure(0, weight=0)
+        top.grid_rowconfigure(1, weight=1)
 
-        def add_row(label: str, var, row: int):
-            Label(conn_frame, text=label).grid(row=row, column=0, sticky='w')
-            Entry(conn_frame, textvariable=var, width=42).grid(row=row, column=1, sticky='we')
+        def add_row(parent: Frame, label: str, var, row: int, width: int = 42):
+            Label(parent, text=label).grid(row=row, column=0, sticky='w')
+            Entry(parent, textvariable=var, width=width).grid(row=row, column=1, sticky='we')
 
         conn_frame = Frame(top, padx=4, pady=4, relief='groove', bd=1)
         conn_frame.grid(row=0, column=0, sticky='nsew', padx=(0, 4))
+        runtime_frame = Frame(top, padx=4, pady=4, relief='groove', bd=1)
+        runtime_frame.grid(row=1, column=0, sticky='nsew', padx=(0, 4), pady=(8, 0))
         io_frame = Frame(top, padx=4, pady=4, relief='groove', bd=1)
-        io_frame.grid(row=0, column=1, sticky='nsew', padx=(4, 0))
+        io_frame.grid(row=0, column=1, rowspan=2, sticky='nsew', padx=(4, 0))
 
-        Label(conn_frame, text='Connection & Runtime', font=('TkDefaultFont', 10, 'bold')).grid(row=0, column=0, columnspan=4, sticky='w')
+        Label(conn_frame, text='Connection Detection', font=('TkDefaultFont', 10, 'bold')).grid(row=0, column=0, columnspan=4, sticky='w')
+        Label(runtime_frame, text='Runtime Options', font=('TkDefaultFont', 10, 'bold')).grid(row=0, column=0, columnspan=4, sticky='w')
         Label(io_frame, text='Config & Output', font=('TkDefaultFont', 10, 'bold')).grid(row=0, column=0, columnspan=5, sticky='w')
 
-        Label(io_frame, text='Config JSON').grid(row=1, column=0, sticky='w')
-        Entry(io_frame, textvariable=self.config_path, width=44).grid(row=1, column=1, columnspan=4, sticky='we')
-        Button(io_frame, text='Browse', command=self.browse_config).grid(row=2, column=1, sticky='w')
-        Button(io_frame, text='Load JSON', command=self.load_config).grid(row=2, column=2, sticky='w')
-        Button(io_frame, text='Save JSON', command=self.save_config).grid(row=2, column=3, sticky='w')
-        Button(io_frame, text='Build Unified Example JSON', command=self.save_unified_example_config).grid(row=2, column=4, sticky='w')
-
-        add_row('Serial Port', self.serial_port, 1)
-        Checkbutton(conn_frame, text='Serial autodetect', variable=self.serial_autodetect).grid(row=1, column=2, sticky='w')
-        add_row('Serial Hint', self.serial_hint, 2)
-        add_row('Address', self.address, 3)
-        add_row('Channel', self.channel, 4)
-        add_row(f'Hz (min {MIN_HZ:g})', self.hz, 5)
-        add_row('Duration Seconds (blank=run forever)', self.duration, 6)
-        Button(conn_frame, text='Detect TEC', command=self.detect_controller).grid(row=7, column=1, sticky='w')
-        Label(io_frame, text='Output Directory').grid(row=3, column=0, sticky='w')
-        Entry(io_frame, textvariable=self.output_directory, width=42).grid(row=3, column=1, columnspan=4, sticky='we')
-        Label(io_frame, text='Output Prefix').grid(row=4, column=0, sticky='w')
-        Entry(io_frame, textvariable=self.output_prefix, width=42).grid(row=4, column=1, columnspan=4, sticky='we')
-        Label(io_frame, text='Huber Port (Unified)').grid(row=5, column=0, sticky='w')
-        Entry(io_frame, textvariable=self.huber_port, width=42).grid(row=5, column=1, columnspan=4, sticky='we')
-        Label(io_frame, text='Bath Standby °C').grid(row=6, column=0, sticky='w')
-        Entry(io_frame, textvariable=self.bath_standby_temp_c, width=16).grid(row=6, column=1, sticky='w')
-        Checkbutton(io_frame, text='Pump ON in safe state', variable=self.pump_safe_on).grid(row=6, column=2, sticky='w')
-        Label(io_frame, text='(stop/error: keep bath pump running)').grid(row=6, column=3, columnspan=2, sticky='w')
-        Label(io_frame, text='Huber Temp Curve °C (comma-separated)').grid(row=7, column=0, sticky='w')
-        Entry(io_frame, textvariable=self.huber_curve_c, width=42).grid(row=7, column=1, columnspan=4, sticky='we')
-        Label(io_frame, text='TEC Voltage Curve V (comma-separated)').grid(row=8, column=0, sticky='w')
-        Entry(io_frame, textvariable=self.voltage_curve_v, width=42).grid(row=8, column=1, columnspan=4, sticky='we')
-        Label(io_frame, text='TEC Current Curve A (comma-separated)').grid(row=9, column=0, sticky='w')
-        Entry(io_frame, textvariable=self.current_curve_a, width=42).grid(row=9, column=1, columnspan=4, sticky='we')
-        Label(io_frame, text='Step Duration Seconds').grid(row=10, column=0, sticky='w')
-        Entry(io_frame, textvariable=self.step_duration_s, width=16).grid(row=10, column=1, sticky='w')
-        Label(io_frame, text='Build Unified Example JSON is a template generator: it uses only non-empty curve fields and does not start hardware.').grid(row=10, column=2, columnspan=3, sticky='w')
-
-        self.status_indicator_label = Label(top, textvariable=self.status_indicator_text, fg='goldenrod', font=('TkDefaultFont', 12, 'bold'))
-        self.status_indicator_label.grid(row=1, column=0, sticky='w', pady=(6, 0))
-        Label(top, textvariable=self.status_text).grid(row=1, column=0, columnspan=2, sticky='w', padx=(18, 0), pady=(6, 0))
-        Label(top, textvariable=self.sample_rate_text).grid(row=2, column=0, columnspan=2, sticky='w')
-        Label(top, text='Run mode:').grid(row=3, column=0, sticky='w')
-        Radiobutton(top, text='Auto', variable=self.run_mode_selection, value='Auto').grid(row=3, column=0, sticky='w', padx=(70, 0))
-        Radiobutton(top, text='TEC-only', variable=self.run_mode_selection, value='TEC-only').grid(row=3, column=0, sticky='w', padx=(130, 0))
-        Radiobutton(top, text='Unified', variable=self.run_mode_selection, value='Unified').grid(row=3, column=0, sticky='w', padx=(220, 0))
-        Label(top, text='Detected from JSON:').grid(row=3, column=1, sticky='e', padx=(0, 110))
-        Label(top, textvariable=self.detected_mode, font=('TkDefaultFont', 9, 'bold')).grid(row=3, column=1, sticky='e')
-
-        detect_frame = Frame(top, padx=4, pady=4, relief='groove', bd=1)
-        detect_frame.grid(row=4, column=0, columnspan=2, sticky='nsew', pady=(8, 0))
-        detect_frame.grid_columnconfigure(0, weight=1)
-        detect_frame.grid_columnconfigure(1, weight=1)
-        Label(detect_frame, text='Dedicated Connection Detection', font=('TkDefaultFont', 10, 'bold')).grid(row=0, column=0, columnspan=2, sticky='w')
-
-        tec_detect_frame = Frame(detect_frame, padx=4, pady=4)
+        tec_detect_frame = Frame(conn_frame, padx=4, pady=4)
         tec_detect_frame.grid(row=1, column=0, sticky='nsew', padx=(0, 4))
-        huber_detect_frame = Frame(detect_frame, padx=4, pady=4)
+        huber_detect_frame = Frame(conn_frame, padx=4, pady=4)
         huber_detect_frame.grid(row=1, column=1, sticky='nsew', padx=(4, 0))
+        conn_frame.grid_columnconfigure(0, weight=1)
+        conn_frame.grid_columnconfigure(1, weight=1)
         tec_detect_frame.grid_columnconfigure(1, weight=1)
         huber_detect_frame.grid_columnconfigure(1, weight=1)
 
@@ -225,24 +180,64 @@ class LiveLoggerGui:
         self.tec_connection_indicator_label.grid(row=1, column=0, sticky='w')
         Label(tec_detect_frame, textvariable=self.tec_connection_text).grid(row=1, column=1, columnspan=2, sticky='w')
         Label(tec_detect_frame, text='Port').grid(row=2, column=0, sticky='w')
-        Entry(tec_detect_frame, textvariable=self.serial_port, width=26).grid(row=2, column=1, sticky='we')
+        Entry(tec_detect_frame, textvariable=self.serial_port, width=24).grid(row=2, column=1, sticky='we')
         Checkbutton(tec_detect_frame, text='Autodetect if blank', variable=self.serial_autodetect).grid(row=2, column=2, sticky='w')
         Label(tec_detect_frame, text='Hint').grid(row=3, column=0, sticky='w')
-        Entry(tec_detect_frame, textvariable=self.serial_hint, width=26).grid(row=3, column=1, sticky='we')
-        Button(tec_detect_frame, text='Scan COM Ports', command=self.scan_serial_ports).grid(row=4, column=0, sticky='w')
-        Button(tec_detect_frame, text='Detect TEC', command=self.detect_controller).grid(row=4, column=1, sticky='w')
+        Entry(tec_detect_frame, textvariable=self.serial_hint, width=24).grid(row=3, column=1, sticky='we')
+        Label(tec_detect_frame, text='Address').grid(row=4, column=0, sticky='w')
+        Entry(tec_detect_frame, textvariable=self.address, width=8).grid(row=4, column=1, sticky='w')
+        Button(tec_detect_frame, text='Scan COM Ports', command=self.scan_serial_ports).grid(row=5, column=0, sticky='w')
+        Button(tec_detect_frame, text='Detect TEC', command=self.detect_controller).grid(row=5, column=1, sticky='w')
 
         Label(huber_detect_frame, text='Huber connection', font=('TkDefaultFont', 9, 'bold')).grid(row=0, column=0, columnspan=3, sticky='w')
         self.huber_connection_indicator_label = Label(huber_detect_frame, textvariable=self.huber_connection_indicator_text, fg='gray50', font=('TkDefaultFont', 12, 'bold'))
         self.huber_connection_indicator_label.grid(row=1, column=0, sticky='w')
         Label(huber_detect_frame, textvariable=self.huber_connection_text).grid(row=1, column=1, columnspan=2, sticky='w')
         Label(huber_detect_frame, text='Port').grid(row=2, column=0, sticky='w')
-        Entry(huber_detect_frame, textvariable=self.huber_port, width=26).grid(row=2, column=1, sticky='we')
+        Entry(huber_detect_frame, textvariable=self.huber_port, width=24).grid(row=2, column=1, sticky='we')
         Button(huber_detect_frame, text='Scan COM Ports', command=self.scan_serial_ports).grid(row=3, column=0, sticky='w')
         Button(huber_detect_frame, text='Detect Huber', command=self.detect_huber).grid(row=3, column=1, sticky='w')
-        Label(detect_frame, textvariable=self.available_ports_text).grid(row=2, column=0, columnspan=2, sticky='w')
+        Label(conn_frame, textvariable=self.available_ports_text, justify=LEFT, wraplength=720).grid(row=2, column=0, columnspan=2, sticky='w', pady=(4, 0))
 
-        conn_frame.grid_columnconfigure(1, weight=1)
+        self.status_indicator_label = Label(runtime_frame, textvariable=self.status_indicator_text, fg='goldenrod', font=('TkDefaultFont', 12, 'bold'))
+        self.status_indicator_label.grid(row=1, column=0, sticky='w', pady=(6, 0))
+        Label(runtime_frame, textvariable=self.status_text).grid(row=1, column=0, columnspan=4, sticky='w', padx=(18, 0), pady=(6, 0))
+        Label(runtime_frame, textvariable=self.sample_rate_text).grid(row=2, column=0, columnspan=4, sticky='w')
+        Label(runtime_frame, text='Run mode').grid(row=3, column=0, sticky='w')
+        Radiobutton(runtime_frame, text='Auto', variable=self.run_mode_selection, value='Auto').grid(row=3, column=1, sticky='w')
+        Radiobutton(runtime_frame, text='TEC-only', variable=self.run_mode_selection, value='TEC-only').grid(row=3, column=2, sticky='w')
+        Radiobutton(runtime_frame, text='Unified', variable=self.run_mode_selection, value='Unified').grid(row=3, column=3, sticky='w')
+        Label(runtime_frame, text='Detected from JSON').grid(row=4, column=0, sticky='w')
+        Label(runtime_frame, textvariable=self.detected_mode, font=('TkDefaultFont', 9, 'bold')).grid(row=4, column=1, sticky='w')
+        add_row(runtime_frame, 'Channel', self.channel, 5, width=16)
+        add_row(runtime_frame, f'Hz (min {MIN_HZ:g})', self.hz, 6, width=16)
+        add_row(runtime_frame, 'Duration Seconds (blank=run forever)', self.duration, 7, width=16)
+        Label(runtime_frame, text='Bath Standby °C').grid(row=8, column=0, sticky='w')
+        Entry(runtime_frame, textvariable=self.bath_standby_temp_c, width=16).grid(row=8, column=1, sticky='w')
+        Checkbutton(runtime_frame, text='Pump ON in safe state', variable=self.pump_safe_on).grid(row=9, column=1, columnspan=2, sticky='w')
+        Label(runtime_frame, text='(stop/error: keep bath pump running)').grid(row=10, column=1, columnspan=3, sticky='w')
+
+        Label(io_frame, text='Config JSON').grid(row=1, column=0, sticky='w')
+        Entry(io_frame, textvariable=self.config_path, width=44).grid(row=1, column=1, columnspan=4, sticky='we')
+        Button(io_frame, text='Browse', command=self.browse_config).grid(row=2, column=1, sticky='w')
+        Button(io_frame, text='Load JSON', command=self.load_config).grid(row=2, column=2, sticky='w')
+        Button(io_frame, text='Save JSON', command=self.save_config).grid(row=2, column=3, sticky='w')
+        Button(io_frame, text='Build Unified Example JSON', command=self.save_unified_example_config).grid(row=2, column=4, sticky='w')
+        Label(io_frame, text='Output Directory').grid(row=3, column=0, sticky='w')
+        Entry(io_frame, textvariable=self.output_directory, width=42).grid(row=3, column=1, columnspan=4, sticky='we')
+        Label(io_frame, text='Output Prefix').grid(row=4, column=0, sticky='w')
+        Entry(io_frame, textvariable=self.output_prefix, width=42).grid(row=4, column=1, columnspan=4, sticky='we')
+        Label(io_frame, text='Huber Temp Curve °C (comma-separated)').grid(row=5, column=0, sticky='w')
+        Entry(io_frame, textvariable=self.huber_curve_c, width=42).grid(row=5, column=1, columnspan=4, sticky='we')
+        Label(io_frame, text='TEC Voltage Curve V (comma-separated)').grid(row=6, column=0, sticky='w')
+        Entry(io_frame, textvariable=self.voltage_curve_v, width=42).grid(row=6, column=1, columnspan=4, sticky='we')
+        Label(io_frame, text='TEC Current Curve A (comma-separated)').grid(row=7, column=0, sticky='w')
+        Entry(io_frame, textvariable=self.current_curve_a, width=42).grid(row=7, column=1, columnspan=4, sticky='we')
+        Label(io_frame, text='Step Duration Seconds').grid(row=8, column=0, sticky='w')
+        Entry(io_frame, textvariable=self.step_duration_s, width=16).grid(row=8, column=1, sticky='w')
+        Label(io_frame, text='Build Unified Example JSON is a template generator: it uses only non-empty curve fields and does not start hardware.').grid(row=8, column=2, columnspan=3, sticky='w')
+
+        runtime_frame.grid_columnconfigure(1, weight=1)
         io_frame.grid_columnconfigure(1, weight=1)
 
         buttons = Frame(self.root, padx=8, pady=4)
@@ -272,7 +267,7 @@ class LiveLoggerGui:
         self.plot_frame = Frame(right_col)
         self.plot_frame.pack(fill=BOTH, expand=True)
         self.request_plot_frame = Frame(io_frame)
-        self.request_plot_frame.grid(row=11, column=0, columnspan=5, sticky='nsew', pady=(8, 0))
+        self.request_plot_frame.grid(row=9, column=0, columnspan=5, sticky='nsew', pady=(8, 0))
         self.canvas = None
         self.figure = None
         self.axis = None
@@ -299,7 +294,7 @@ class LiveLoggerGui:
             self.request_axes[1].grid(True, which='major', linestyle='--', alpha=0.6)
             self.canvas.draw_idle()
             self.request_canvas.draw_idle()
-        Checkbutton(io_frame, text='Show requested input line', variable=self.show_requested_line, command=self._redraw_requested_input_plot).grid(row=12, column=0, columnspan=2, sticky='w')
+        Checkbutton(io_frame, text='Show requested input line', variable=self.show_requested_line, command=self._redraw_requested_input_plot).grid(row=10, column=0, columnspan=2, sticky='w')
         Checkbutton(right_col, text='Show live line (default on)', variable=self.show_live_line, command=self._redraw_plot).pack(anchor='w')
         Checkbutton(right_col, text='Enable second live plot (defaults to diff voltage 1/2)', variable=self.enable_second_plot, command=self._redraw_plot).pack(anchor='w')
 
@@ -966,25 +961,54 @@ class LiveLoggerGui:
     def _format_serial_port_choices(port_infos) -> str:
         rows = []
         for port in port_infos:
-            device = getattr(port, 'device', '')
-            description = getattr(port, 'description', '')
-            hwid = getattr(port, 'hwid', '')
-            details = ' | '.join(part for part in (description, hwid) if part)
-            rows.append(f'{device} - {details}' if details else str(device))
-        return '; '.join(rows) if rows else 'No serial ports found.'
+            device = str(getattr(port, 'device', '') or '').strip()
+            description = str(getattr(port, 'description', '') or '').strip()
+            hwid = str(getattr(port, 'hwid', '') or '').strip()
+            vid = getattr(port, 'vid', None)
+            pid = getattr(port, 'pid', None)
+            serial_number = str(getattr(port, 'serial_number', '') or '').strip()
+            vid_pid = f'VID:PID={vid:04X}:{pid:04X}' if vid is not None and pid is not None else ''
+            details = [part for part in (description, vid_pid, serial_number, hwid) if part]
+            if details:
+                rows.append(f'{device} — ' + ' | '.join(details))
+            elif device:
+                rows.append(device)
+        return '\n'.join(rows) if rows else 'No serial ports found.'
 
-    def _available_serial_port_choices(self) -> str:
-        return self._format_serial_port_choices(list_ports.comports())
+    @staticmethod
+    def _summarize_serial_port_choices(port_infos) -> str:
+        ports = list(port_infos)
+        if not ports:
+            return 'COM scan: no serial ports found.'
+        labels = []
+        for port in ports[:4]:
+            device = str(getattr(port, 'device', '') or '').strip()
+            description = str(getattr(port, 'description', '') or '').strip()
+            labels.append(f'{device} ({description})' if description else device)
+        suffix = f' (+{len(ports) - 4} more)' if len(ports) > 4 else ''
+        return (
+            f'COM scan: found {len(ports)} port(s): ' + ', '.join(labels) + suffix
+            + '. Copy a COM name into the TEC or Huber Port field, then click Detect.'
+        )
+
+    def _available_serial_port_infos(self):
+        return list(list_ports.comports())
 
     def scan_serial_ports(self) -> None:
         try:
-            choices = self._available_serial_port_choices()
+            port_infos = self._available_serial_port_infos()
+            choices = self._format_serial_port_choices(port_infos)
         except Exception as exc:
-            self.available_ports_text.set(f'Serial tools: scan failed ({exc})')
+            self.available_ports_text.set(f'COM scan: failed ({exc})')
             messagebox.showerror('Scan COM Ports failed', str(exc))
             return
-        self.available_ports_text.set(f'Serial tools: {choices}')
-        messagebox.showinfo('Available COM Ports', choices)
+        self.available_ports_text.set(self._summarize_serial_port_choices(port_infos))
+        messagebox.showinfo(
+            'Available COM Ports',
+            'Use the COM name at the start of a line, e.g. COM3.\n'
+            'Type it into the TEC Port or Huber Port field and click Detect.\n\n'
+            f'{choices}',
+        )
 
     def detect_controller(self) -> None:
         try:
