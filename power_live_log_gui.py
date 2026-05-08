@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from dataclasses import asdict
 from pathlib import Path
 from tkinter import BOTH, END, LEFT, RIGHT, VERTICAL, Button, Canvas, Checkbutton, Entry, Frame, IntVar, Label, Listbox, Radiobutton, Scrollbar, StringVar, Tk, filedialog, messagebox
+from tkinter.ttk import Notebook
 
 from serial.tools import list_ports
 
@@ -89,6 +90,12 @@ class NoopBathAdapter:
     def set_setpoint(self, temp_c: float) -> bool:
         return True
 
+    def start_process(self) -> bool:
+        return True
+
+    def stop_process(self) -> bool:
+        return True
+
     def set_pump_state(self, on_off: bool) -> bool:
         return True
 
@@ -124,7 +131,6 @@ class LiveLoggerGui:
         self.show_requested_line = IntVar(value=1)
         self.show_live_line = IntVar(value=1)
         self.enable_second_plot = IntVar(value=0)
-        self.manual_tec_power_w = StringVar(value='0.0')
         self.manual_tec_voltage_v = StringVar(value='0.0')
         self.manual_tec_current_a = StringVar(value='0.0')
         self.manual_huber_temp_c = StringVar(value='25.0')
@@ -178,7 +184,16 @@ class LiveLoggerGui:
         self.root.bind_all('<Button-4>', self._on_mousewheel)
         self.root.bind_all('<Button-5>', self._on_mousewheel)
 
-        top = Frame(self.content_frame, padx=8, pady=8)
+        self.notebook = Notebook(self.content_frame)
+        self.notebook.pack(fill=BOTH, expand=True, padx=8, pady=8)
+        self.run_tab = Frame(self.notebook)
+        self.json_tab = Frame(self.notebook)
+        self.manual_tab = Frame(self.notebook)
+        self.notebook.add(self.run_tab, text='Run Setup')
+        self.notebook.add(self.json_tab, text='JSON Example Editor')
+        self.notebook.add(self.manual_tab, text='Manual Commands')
+
+        top = Frame(self.run_tab, padx=8, pady=8)
         top.pack(fill=BOTH)
         top.grid_columnconfigure(0, weight=1)
         top.grid_columnconfigure(1, weight=2)
@@ -202,8 +217,8 @@ class LiveLoggerGui:
         conn_frame.grid(row=0, column=0, sticky='nsew', padx=(0, 4))
         runtime_frame = Frame(top, padx=4, pady=4, relief='groove', bd=1)
         runtime_frame.grid(row=1, column=0, sticky='nsew', padx=(0, 4), pady=(8, 0))
-        io_frame = Frame(top, padx=4, pady=4, relief='groove', bd=1)
-        io_frame.grid(row=0, column=1, rowspan=2, sticky='nsew', padx=(4, 0))
+        io_frame = Frame(self.json_tab, padx=8, pady=8)
+        io_frame.pack(fill=BOTH, expand=True)
 
         Label(conn_frame, text='Connection Detection', font=('TkDefaultFont', 10, 'bold')).grid(row=0, column=0, columnspan=4, sticky='w')
         Label(runtime_frame, text='Runtime Options', font=('TkDefaultFont', 10, 'bold')).grid(row=0, column=0, columnspan=4, sticky='w')
@@ -293,27 +308,25 @@ class LiveLoggerGui:
         Button(buttons, text='Use selection for Plot 2', command=self.apply_second_plot_selection).pack(side=LEFT, padx=(6, 0))
         Button(buttons, text='Zero TEC Output', command=self.zero_output).pack(side=LEFT, padx=(6, 0))
 
-        manual_frame = Frame(self.content_frame, padx=8, pady=4, relief='groove', bd=1)
-        manual_frame.pack(fill=BOTH, padx=8, pady=(0, 4))
+        manual_frame = Frame(self.manual_tab, padx=8, pady=8)
+        manual_frame.pack(fill=BOTH, expand=True)
         Label(manual_frame, text='Manual Commands', font=('TkDefaultFont', 10, 'bold')).grid(row=0, column=0, columnspan=8, sticky='w')
         Label(manual_frame, textvariable=self.manual_command_status, justify=LEFT, anchor='w').grid(row=1, column=0, columnspan=8, sticky='we')
-        Label(manual_frame, text='TEC power W').grid(row=2, column=0, sticky='w')
-        Entry(manual_frame, textvariable=self.manual_tec_power_w, width=10).grid(row=2, column=1, sticky='w')
-        Button(manual_frame, text='Set TEC Power', command=self.manual_set_tec_power).grid(row=2, column=2, sticky='w')
-        Label(manual_frame, text='TEC V / A').grid(row=2, column=3, sticky='w')
-        Entry(manual_frame, textvariable=self.manual_tec_voltage_v, width=8).grid(row=2, column=4, sticky='w')
-        Entry(manual_frame, textvariable=self.manual_tec_current_a, width=8).grid(row=2, column=5, sticky='w')
-        Button(manual_frame, text='Set TEC V/I', command=self.manual_set_tec_voltage_current).grid(row=2, column=6, sticky='w')
-        Button(manual_frame, text='Zero TEC', command=self.zero_output).grid(row=2, column=7, sticky='w')
+        Label(manual_frame, text='TEC V / A').grid(row=2, column=0, sticky='w')
+        Entry(manual_frame, textvariable=self.manual_tec_voltage_v, width=8).grid(row=2, column=1, sticky='w')
+        Entry(manual_frame, textvariable=self.manual_tec_current_a, width=8).grid(row=2, column=2, sticky='w')
+        Button(manual_frame, text='Set TEC V/I', command=self.manual_set_tec_voltage_current).grid(row=2, column=3, sticky='w')
+        Button(manual_frame, text='Zero TEC', command=self.zero_output).grid(row=2, column=4, sticky='w')
+        Label(manual_frame, text='TEC power is controlled by voltage/current; W is logged/previewed as V×I.').grid(row=2, column=5, columnspan=3, sticky='w')
         Label(manual_frame, text='Huber °C').grid(row=3, column=0, sticky='w')
         Entry(manual_frame, textvariable=self.manual_huber_temp_c, width=10).grid(row=3, column=1, sticky='w')
         Button(manual_frame, text='Set Huber Temp', command=self.manual_set_huber_temperature).grid(row=3, column=2, sticky='w')
-        Checkbutton(manual_frame, text='Pump ON', variable=self.manual_pump_on).grid(row=3, column=3, sticky='w')
-        Button(manual_frame, text='Apply Pump', command=self.manual_set_huber_pump).grid(row=3, column=4, sticky='w')
+        Button(manual_frame, text='Start Huber Process', command=self.manual_start_huber_process).grid(row=3, column=3, sticky='w')
+        Button(manual_frame, text='Stop Huber Process', command=self.manual_stop_huber_process).grid(row=3, column=4, sticky='w')
         Button(manual_frame, text='Read Huber', command=self.manual_read_huber).grid(row=3, column=5, sticky='w')
         manual_frame.grid_columnconfigure(7, weight=1)
 
-        mid = Frame(self.content_frame, padx=8, pady=4)
+        mid = Frame(self.run_tab, padx=8, pady=4)
         mid.pack(fill=BOTH, expand=True)
         left_col = Frame(mid)
         left_col.pack(side=LEFT, fill='y', padx=(0, 8))
@@ -446,19 +459,6 @@ class LiveLoggerGui:
             self.manual_command_status.set(f'Manual commands: {label} failed ({exc})')
             messagebox.showerror(f'{label} failed', str(exc))
 
-    def manual_set_tec_power(self) -> None:
-        def action():
-            power_w = self._parse_numeric_field(self.manual_tec_power_w.get(), 'TEC power W')
-            adapter = TecPowerAdapter(self._build_config())
-            try:
-                adapter.connect()
-                adapter.set_power(power_w)
-            finally:
-                adapter.close()
-            self._set_tec_connection_status('green', f'TEC: manual power set to {power_w:g} W')
-
-        self._run_manual_command('Set TEC power', action)
-
     def manual_set_tec_voltage_current(self) -> None:
         def action():
             voltage_v = self._parse_numeric_field(self.manual_tec_voltage_v.get(), 'TEC voltage V')
@@ -492,16 +492,23 @@ class LiveLoggerGui:
 
         self._run_manual_command('Set Huber temp', action)
 
-    def manual_set_huber_pump(self) -> None:
-        pump_on = bool(self.manual_pump_on.get())
-
+    def manual_start_huber_process(self) -> None:
         def action():
-            ok = self._with_huber_adapter(lambda adapter: adapter.set_pump_state(pump_on))
+            ok = self._with_huber_adapter(lambda adapter: adapter.start_process())
             if not ok:
-                raise RuntimeError('Huber pump command returned False or is unsupported')
-            self._set_huber_connection_status('green', f'Huber: manual pump {"ON" if pump_on else "OFF"}')
+                raise RuntimeError('Huber start-process command returned False')
+            self._set_huber_connection_status('green', 'Huber: process started (thermoregulation ON)')
 
-        self._run_manual_command('Set Huber pump', action)
+        self._run_manual_command('Start Huber process', action)
+
+    def manual_stop_huber_process(self) -> None:
+        def action():
+            ok = self._with_huber_adapter(lambda adapter: adapter.stop_process())
+            if not ok:
+                raise RuntimeError('Huber stop-process command returned False')
+            self._set_huber_connection_status('green', 'Huber: process stopped (thermoregulation OFF)')
+
+        self._run_manual_command('Stop Huber process', action)
 
     def manual_read_huber(self) -> None:
         def action():

@@ -178,7 +178,10 @@ class DualDeviceRunEngine:
 
     def _apply_step(self, step: UnifiedStep, legacy_power_policy: str) -> None:
         if step.bath_setpoint_c is not None:
-            self.bath_adapter.set_setpoint(step.bath_setpoint_c)
+            if not self.bath_adapter.set_setpoint(step.bath_setpoint_c):
+                raise RuntimeError(f"Bath setpoint command returned False for step {step.name!r}")
+            if hasattr(self.bath_adapter, "start_process") and not self.bath_adapter.start_process():
+                raise RuntimeError(f"Bath start-process command returned False for step {step.name!r}")
         has_tec_request = step.tec_power_w is not None or step.tec_voltage_v is not None or step.tec_current_a is not None
         if not has_tec_request:
             return

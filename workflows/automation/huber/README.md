@@ -15,6 +15,7 @@ This package provides a workflow-level adapter that wraps the existing Huber con
 - `read_bath_temp()`
 - `read_setpoint()`
 - `set_setpoint(temp_c)`
+- `start_process()` / `stop_process()` (thermoregulation on/off using the legacy Huber command path)
 - `set_pump_state(on_off)`
 - `safe_standby(standby_temp_c, pump_state)`
 - `close()`
@@ -29,4 +30,4 @@ Pump control is capability-based:
 
 ## Logging
 
-The adapter emits structured log events for connection, reads, writes, safe standby, unsupported capabilities, and close.
+The adapter emits structured log events for connection, reads, writes, thermoregulation start/stop, safe standby, unsupported capabilities, and close.

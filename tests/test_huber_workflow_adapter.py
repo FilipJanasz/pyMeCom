@@ -8,6 +8,7 @@ class FakeConnection:
         self.last_error_code = None
         self._temp = 19.5
         self._setpoint = 22.0
+        self.thermoregulation_state = None
 
     def connect(self):
         return True
@@ -20,6 +21,10 @@ class FakeConnection:
 
     def set_setpoint(self, value):
         self._setpoint = value
+        return True
+
+    def set_thermoregulation(self, state):
+        self.thermoregulation_state = state
         return True
 
     def close(self):
@@ -45,6 +50,10 @@ def test_adapter_simulation_like_path_without_pump_control():
     assert adapter.read_setpoint() == 22.0
     assert adapter.set_setpoint(27.5) is True
     assert adapter.read_setpoint() == 27.5
+    assert adapter.start_process() is True
+    assert conn.thermoregulation_state is True
+    assert adapter.stop_process() is True
+    assert conn.thermoregulation_state is False
     assert adapter.set_pump_state(True) is False
     assert adapter.safe_standby(20.0, False) is True
 
