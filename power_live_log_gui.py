@@ -157,13 +157,11 @@ class LiveLoggerGui:
         self.animating = False
         self.stop_requested = False
         self.unified_engine: DualDeviceRunEngine | None = None
-        self.status_text = StringVar(value='Controller status: unknown')
-        self.status_indicator_text = StringVar(value='●')
         self.tec_connection_text = StringVar(value='TEC: not checked')
         self.tec_connection_indicator_text = StringVar(value='●')
         self.huber_connection_text = StringVar(value='Huber: not checked')
         self.huber_connection_indicator_text = StringVar(value='●')
-        self.available_ports_text = StringVar(value='Serial tools: click Scan COM Ports to list available ports.')
+        self.available_ports_text = StringVar(value='Serial tools: click Scan COM Ports to list available ports here.')
         self.sample_rate_text = StringVar(value='Measured acquisition rate: n/a')
         self._last_sample_ts: float | None = None
 
@@ -244,7 +242,6 @@ class LiveLoggerGui:
         Entry(tec_detect_frame, textvariable=self.serial_hint, width=24).grid(row=3, column=1, sticky='we')
         Label(tec_detect_frame, text='Address').grid(row=4, column=0, sticky='w')
         Entry(tec_detect_frame, textvariable=self.address, width=8).grid(row=4, column=1, sticky='w')
-        Button(tec_detect_frame, text='Scan COM Ports', command=self.scan_serial_ports).grid(row=5, column=0, sticky='w')
         Button(tec_detect_frame, text='Detect TEC', command=self.detect_controller).grid(row=5, column=1, sticky='w')
 
         Label(huber_detect_frame, text='Huber connection', font=('TkDefaultFont', 9, 'bold')).grid(row=0, column=0, columnspan=3, sticky='w')
@@ -253,28 +250,25 @@ class LiveLoggerGui:
         add_status_label(huber_detect_frame, self.huber_connection_text, row=1, column=1, columnspan=2)
         Label(huber_detect_frame, text='Port').grid(row=2, column=0, sticky='w')
         Entry(huber_detect_frame, textvariable=self.huber_port, width=24).grid(row=2, column=1, sticky='we')
-        Button(huber_detect_frame, text='Scan COM Ports', command=self.scan_serial_ports).grid(row=3, column=0, sticky='w')
         Button(huber_detect_frame, text='Detect Huber', command=self.detect_huber).grid(row=3, column=1, sticky='w')
-        Label(conn_frame, textvariable=self.available_ports_text, justify=LEFT, anchor='w', wraplength=COM_SCAN_SUMMARY_WRAP_PX).grid(row=2, column=0, columnspan=2, sticky='we', pady=(4, 0))
+        Button(conn_frame, text='Scan COM Ports', command=self.scan_serial_ports).grid(row=2, column=0, sticky='nw', pady=(4, 0))
+        Label(conn_frame, textvariable=self.available_ports_text, justify=LEFT, anchor='w', wraplength=COM_SCAN_SUMMARY_WRAP_PX).grid(row=2, column=1, sticky='we', pady=(4, 0))
 
-        self.status_indicator_label = Label(runtime_frame, textvariable=self.status_indicator_text, fg='goldenrod', font=('TkDefaultFont', 12, 'bold'))
-        self.status_indicator_label.grid(row=1, column=0, sticky='w', pady=(6, 0))
-        Label(runtime_frame, textvariable=self.status_text).grid(row=1, column=0, columnspan=4, sticky='w', padx=(18, 0), pady=(6, 0))
-        Label(runtime_frame, textvariable=self.sample_rate_text).grid(row=2, column=0, columnspan=4, sticky='w')
-        Label(runtime_frame, text='Run mode').grid(row=3, column=0, sticky='w')
-        Radiobutton(runtime_frame, text='Auto', variable=self.run_mode_selection, value='Auto').grid(row=3, column=1, sticky='w')
-        Radiobutton(runtime_frame, text='TEC-only', variable=self.run_mode_selection, value='TEC-only').grid(row=3, column=2, sticky='w')
-        Radiobutton(runtime_frame, text='Unified', variable=self.run_mode_selection, value='Unified').grid(row=3, column=3, sticky='w')
-        Radiobutton(runtime_frame, text='Huber-only', variable=self.run_mode_selection, value='Huber-only').grid(row=3, column=4, sticky='w')
-        Label(runtime_frame, text='Detected from JSON').grid(row=4, column=0, sticky='w')
-        Label(runtime_frame, textvariable=self.detected_mode, font=('TkDefaultFont', 9, 'bold')).grid(row=4, column=1, sticky='w')
-        add_row(runtime_frame, 'Channel', self.channel, 5, width=16)
-        add_row(runtime_frame, f'Hz (min {MIN_HZ:g})', self.hz, 6, width=16)
-        add_row(runtime_frame, 'Duration Seconds (blank=run forever)', self.duration, 7, width=16)
-        Label(runtime_frame, text='Bath Standby °C').grid(row=8, column=0, sticky='w')
-        Entry(runtime_frame, textvariable=self.bath_standby_temp_c, width=16).grid(row=8, column=1, sticky='w')
-        Checkbutton(runtime_frame, text='Pump ON in safe state', variable=self.pump_safe_on).grid(row=9, column=1, columnspan=2, sticky='w')
-        Label(runtime_frame, text='(stop/error: keep bath pump running)').grid(row=10, column=1, columnspan=3, sticky='w')
+        Label(runtime_frame, textvariable=self.sample_rate_text).grid(row=1, column=0, columnspan=4, sticky='w')
+        Label(runtime_frame, text='Run mode').grid(row=2, column=0, sticky='w')
+        Radiobutton(runtime_frame, text='Auto', variable=self.run_mode_selection, value='Auto').grid(row=2, column=1, sticky='w')
+        Radiobutton(runtime_frame, text='TEC-only', variable=self.run_mode_selection, value='TEC-only').grid(row=2, column=2, sticky='w')
+        Radiobutton(runtime_frame, text='Unified', variable=self.run_mode_selection, value='Unified').grid(row=2, column=3, sticky='w')
+        Radiobutton(runtime_frame, text='Huber-only', variable=self.run_mode_selection, value='Huber-only').grid(row=2, column=4, sticky='w')
+        Label(runtime_frame, text='Detected from JSON').grid(row=3, column=0, sticky='w')
+        Label(runtime_frame, textvariable=self.detected_mode, font=('TkDefaultFont', 9, 'bold')).grid(row=3, column=1, sticky='w')
+        add_row(runtime_frame, 'Channel', self.channel, 4, width=16)
+        add_row(runtime_frame, f'Hz (min {MIN_HZ:g})', self.hz, 5, width=16)
+        add_row(runtime_frame, 'Duration Seconds (blank=run forever)', self.duration, 6, width=16)
+        Label(runtime_frame, text='Bath Standby °C').grid(row=7, column=0, sticky='w')
+        Entry(runtime_frame, textvariable=self.bath_standby_temp_c, width=16).grid(row=7, column=1, sticky='w')
+        Checkbutton(runtime_frame, text='Pump ON in safe state', variable=self.pump_safe_on).grid(row=8, column=1, columnspan=2, sticky='w')
+        Label(runtime_frame, text='(stop/error: keep bath pump running)').grid(row=9, column=1, columnspan=3, sticky='w')
 
         Label(io_frame, text='Config JSON').grid(row=1, column=0, sticky='w')
         Entry(io_frame, textvariable=self.config_path, width=44).grid(row=1, column=1, columnspan=4, sticky='we')
@@ -1169,8 +1163,6 @@ class LiveLoggerGui:
         self.unified_engine = engine
 
         def on_event(evt: dict[str, object]) -> None:
-            state = str(evt.get("next_state") or evt.get("state") or "")
-            self.root.after(0, lambda s=state: self.status_text.set(f'Engine state: {s}'))
             if evt.get("event") == "state_transition" and evt.get("next_state") == "RUNNING_STEP":
                 if has_any_tec_request:
                     self.root.after(0, lambda: self._set_tec_connection_status('green', 'TEC: connected (unified run)'))
@@ -1401,22 +1393,6 @@ class LiveLoggerGui:
                 rows.append(device)
         return '\n'.join(rows) if rows else 'No serial ports found.'
 
-    @staticmethod
-    def _summarize_serial_port_choices(port_infos) -> str:
-        ports = list(port_infos)
-        if not ports:
-            return 'COM scan: no serial ports found.'
-        labels = []
-        for port in ports[:4]:
-            device = str(getattr(port, 'device', '') or '').strip()
-            description = str(getattr(port, 'description', '') or '').strip()
-            labels.append(f'{device} ({description})' if description else device)
-        suffix = f' (+{len(ports) - 4} more)' if len(ports) > 4 else ''
-        return (
-            f'COM scan: found {len(ports)} port(s): ' + ', '.join(labels) + suffix
-            + '. Copy a COM name into the TEC or Huber Port field, then click Detect.'
-        )
-
     def _available_serial_port_infos(self):
         return list(list_ports.comports())
 
@@ -1428,12 +1404,9 @@ class LiveLoggerGui:
             self.available_ports_text.set(f'COM scan: failed ({exc})')
             messagebox.showerror('Scan COM Ports failed', str(exc))
             return
-        self.available_ports_text.set(self._summarize_serial_port_choices(port_infos))
-        messagebox.showinfo(
-            'Available COM Ports',
-            'Use the COM name at the start of a line, e.g. COM3.\n'
-            'Type it into the TEC Port or Huber Port field and click Detect.\n\n'
-            f'{choices}',
+        self.available_ports_text.set(
+            'COM scan results (copy a COM name into the TEC or Huber Port field, then click Detect):\n'
+            f'{choices}'
         )
 
     @staticmethod
@@ -1564,8 +1537,10 @@ class LiveLoggerGui:
         return color_map.get(state, 'black')
 
     def _set_controller_status(self, state: str, text: str) -> None:
-        self.status_indicator_label.configure(fg=self._connection_color(state))
-        self.status_text.set(text)
+        # The per-device TEC and Huber connection indicators are the visible
+        # controller status displays.  Keep this compatibility hook for older
+        # call sites without adding a third, redundant runtime indicator.
+        return
 
     def _set_tec_connection_status(self, state: str, text: str) -> None:
         self.tec_connection_indicator_label.configure(fg=self._connection_color(state))
