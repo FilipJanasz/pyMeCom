@@ -146,7 +146,7 @@ class FakePortInfo:
         self.hwid = hwid
 
 
-def test_format_serial_port_choices_shows_device_description_and_hwid():
+def test_format_serial_port_choices_shows_device_description():
     choices = LiveLoggerGui._format_serial_port_choices(
         [
             FakePortInfo("COM3", "USB Serial Device", "VID:PID=1234:5678"),
@@ -154,10 +154,21 @@ def test_format_serial_port_choices_shows_device_description_and_hwid():
         ]
     )
 
-    assert choices == "COM3 — USB Serial Device | VID:PID=1234:5678\nCOM4"
+    assert choices == "COM3 — USB Serial Device\nCOM4"
 
 
-def test_summarize_serial_port_choices_explains_how_to_use_ports():
+def test_serial_port_choice_rows_maps_explanations_to_com_devices():
+    rows = LiveLoggerGui._serial_port_choice_rows(
+        [
+            FakePortInfo("COM3", "USB Serial Device", "VID:PID=1234:5678"),
+            FakePortInfo("COM4", "Bluetooth Serial"),
+        ]
+    )
+
+    assert rows == [("COM3 — USB Serial Device", "COM3"), ("COM4 — Bluetooth Serial", "COM4")]
+
+
+def test_summarize_serial_port_choices_explains_dropdown_use():
     summary = LiveLoggerGui._summarize_serial_port_choices(
         [
             FakePortInfo("COM3", "USB Serial Device", "VID:PID=1234:5678"),
@@ -166,8 +177,8 @@ def test_summarize_serial_port_choices_explains_how_to_use_ports():
     )
 
     assert summary == (
-        "COM scan: found 2 port(s): COM3 (USB Serial Device), COM4 (Bluetooth Serial). "
-        "Copy a COM name into the TEC or Huber Port field, then click Detect."
+        "COM scan: found 2 port(s): COM3, COM4. "
+        "Select one, then click Use for TEC or Use for Huber."
     )
 
 
@@ -179,6 +190,12 @@ def test_connection_status_text_is_clipped_for_wrapping_labels():
     assert len(clipped) == 80
     assert clipped.endswith("…")
     assert "\n" not in clipped
+
+
+def test_display_status_text_moves_long_details_to_details_button():
+    text = "TEC: not detected or connected (" + "long diagnostic detail " * 20 + ")"
+
+    assert LiveLoggerGui._display_status_text(text) == "TEC: not detected or connected (see Details)"
 
 
 def test_connection_color_supports_separate_detect_indicator_states():

@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from dataclasses import asdict
 from pathlib import Path
 from tkinter import BOTH, END, LEFT, RIGHT, VERTICAL, Button, Canvas, Checkbutton, Entry, Frame, IntVar, Label, Listbox, Radiobutton, Scrollbar, StringVar, Tk, filedialog, messagebox
-from tkinter.ttk import Notebook
+from tkinter.ttk import Combobox, Notebook
 
 from serial.tools import list_ports
 
@@ -44,9 +44,10 @@ UNIFIED_LIVE_COLUMNS = [
     'tec_current_a',
 ]
 UNIFIED_DEFAULT_COLUMNS = ['bath_temp_c', 'tec_actual_power_w', 'bath_setpoint_c', 'tec_power_w']
-CONNECTION_STATUS_WRAP_PX = 300
-CONNECTION_STATUS_MAX_CHARS = 96
-COM_SCAN_SUMMARY_WRAP_PX = 620
+CONNECTION_STATUS_WRAP_PX = 260
+CONNECTION_STATUS_MAX_CHARS = 72
+CONNECTION_STATUS_LABEL_CHARS = 44
+COM_PORT_CHOICE_WIDTH_CHARS = 72
 WINDOW_SCREEN_MARGIN_PX = 80
 WINDOW_MIN_WIDTH_PX = 900
 WINDOW_MIN_HEIGHT_PX = 560
@@ -161,7 +162,12 @@ class LiveLoggerGui:
         self.tec_connection_indicator_text = StringVar(value='●')
         self.huber_connection_text = StringVar(value='Huber: not checked')
         self.huber_connection_indicator_text = StringVar(value='●')
-        self.available_ports_text = StringVar(value='Serial tools: click Scan COM Ports to list available ports here.')
+        self.available_ports_text = StringVar(value='Serial tools: click Scan COM Ports, choose a port from the list, then apply it.')
+        self.selected_serial_port_choice = StringVar(value='')
+        self.serial_port_choices: dict[str, str] = {}
+        self.last_tec_connection_detail = 'TEC: not checked'
+        self.last_huber_connection_detail = 'Huber: not checked'
+        self.huber_detect_thread: threading.Thread | None = None
         self.sample_rate_text = StringVar(value='Measured acquisition rate: n/a')
         self._last_sample_ts: float | None = None
 
@@ -208,6 +214,7 @@ class LiveLoggerGui:
                 textvariable=var,
                 justify=LEFT,
                 anchor='w',
+                width=CONNECTION_STATUS_LABEL_CHARS,
                 wraplength=CONNECTION_STATUS_WRAP_PX,
             ).grid(row=row, column=column, columnspan=columnspan, sticky='we')
 
@@ -242,7 +249,9 @@ class LiveLoggerGui:
         Entry(tec_detect_frame, textvariable=self.serial_hint, width=24).grid(row=3, column=1, sticky='we')
         Label(tec_detect_frame, text='Address').grid(row=4, column=0, sticky='w')
         Entry(tec_detect_frame, textvariable=self.address, width=8).grid(row=4, column=1, sticky='w')
-        Button(tec_detect_frame, text='Detect TEC', command=self.detect_controller).grid(row=5, column=1, sticky='w')
+        self.detect_tec_button = Button(tec_detect_frame, text='Detect TEC', command=self.detect_controller)
+        self.detect_tec_button.grid(row=5, column=1, sticky='w')
+        Button(tec_detect_frame, text='Details', command=self.show_tec_connection_details).grid(row=5, column=2, sticky='w', padx=(4, 0))
 
         Label(huber_detect_frame, text='Huber connection', font=('TkDefaultFont', 9, 'bold')).grid(row=0, column=0, columnspan=3, sticky='w')
         self.huber_connection_indicator_label = Label(huber_detect_frame, textvariable=self.huber_connection_indicator_text, fg='gray50', font=('TkDefaultFont', 12, 'bold'))
@@ -250,9 +259,24 @@ class LiveLoggerGui:
         add_status_label(huber_detect_frame, self.huber_connection_text, row=1, column=1, columnspan=2)
         Label(huber_detect_frame, text='Port').grid(row=2, column=0, sticky='w')
         Entry(huber_detect_frame, textvariable=self.huber_port, width=24).grid(row=2, column=1, sticky='we')
-        Button(huber_detect_frame, text='Detect Huber', command=self.detect_huber).grid(row=3, column=1, sticky='w')
-        Button(conn_frame, text='Scan COM Ports', command=self.scan_serial_ports).grid(row=2, column=0, sticky='nw', pady=(4, 0))
-        Label(conn_frame, textvariable=self.available_ports_text, justify=LEFT, anchor='w', wraplength=COM_SCAN_SUMMARY_WRAP_PX).grid(row=2, column=1, sticky='we', pady=(4, 0))
+        self.detect_huber_button = Button(huber_detect_frame, text='Detect Huber', command=self.detect_huber)
+        self.detect_huber_button.grid(row=3, column=1, sticky='w')
+        Button(huber_detect_frame, text='Details', command=self.show_huber_connection_details).grid(row=3, column=2, sticky='w', padx=(4, 0))
+        serial_tools_frame = Frame(conn_frame)
+        serial_tools_frame.grid(row=2, column=0, columnspan=2, sticky='we', pady=(4, 0))
+        serial_tools_frame.grid_columnconfigure(1, weight=1)
+        Button(serial_tools_frame, text='Scan COM Ports', command=self.scan_serial_ports).grid(row=0, column=0, sticky='w')
+        self.serial_ports_combobox = Combobox(
+            serial_tools_frame,
+            textvariable=self.selected_serial_port_choice,
+            state='readonly',
+            width=COM_PORT_CHOICE_WIDTH_CHARS,
+            values=(),
+        )
+        self.serial_ports_combobox.grid(row=0, column=1, sticky='we', padx=(6, 0))
+        Button(serial_tools_frame, text='Use for TEC', command=lambda: self.apply_selected_serial_port('tec')).grid(row=0, column=2, sticky='w', padx=(6, 0))
+        Button(serial_tools_frame, text='Use for Huber', command=lambda: self.apply_selected_serial_port('huber')).grid(row=0, column=3, sticky='w', padx=(4, 0))
+        Label(serial_tools_frame, textvariable=self.available_ports_text, justify=LEFT, anchor='w').grid(row=1, column=0, columnspan=4, sticky='w', pady=(2, 0))
 
         Label(runtime_frame, textvariable=self.sample_rate_text).grid(row=1, column=0, columnspan=4, sticky='w')
         Label(runtime_frame, text='Run mode').grid(row=2, column=0, sticky='w')
@@ -1376,22 +1400,47 @@ class LiveLoggerGui:
         return normalized[: max_chars - 1].rstrip() + '…'
 
     @staticmethod
-    def _format_serial_port_choices(port_infos) -> str:
-        rows = []
+    def _serial_port_choice_rows(port_infos) -> list[tuple[str, str]]:
+        rows: list[tuple[str, str]] = []
+        used_labels: set[str] = set()
         for port in port_infos:
             device = str(getattr(port, 'device', '') or '').strip()
+            if not device:
+                continue
             description = str(getattr(port, 'description', '') or '').strip()
             hwid = str(getattr(port, 'hwid', '') or '').strip()
             vid = getattr(port, 'vid', None)
             pid = getattr(port, 'pid', None)
             serial_number = str(getattr(port, 'serial_number', '') or '').strip()
             vid_pid = f'VID:PID={vid:04X}:{pid:04X}' if vid is not None and pid is not None else ''
-            details = [part for part in (description, vid_pid, serial_number, hwid) if part]
-            if details:
-                rows.append(f'{device} — ' + ' | '.join(details))
-            elif device:
-                rows.append(device)
+            explanation = ', '.join(part for part in (description, vid_pid, serial_number) if part)
+            if not explanation and hwid:
+                explanation = hwid
+            label = f'{device} — {explanation}' if explanation else device
+            if len(label) > COM_PORT_CHOICE_WIDTH_CHARS + 12:
+                label = label[: COM_PORT_CHOICE_WIDTH_CHARS + 11].rstrip() + '…'
+            unique_label = label
+            duplicate = 2
+            while unique_label in used_labels:
+                unique_label = f'{label} ({duplicate})'
+                duplicate += 1
+            used_labels.add(unique_label)
+            rows.append((unique_label, device))
+        return rows
+
+    @staticmethod
+    def _format_serial_port_choices(port_infos) -> str:
+        rows = [label for label, _device in LiveLoggerGui._serial_port_choice_rows(port_infos)]
         return '\n'.join(rows) if rows else 'No serial ports found.'
+
+    @staticmethod
+    def _summarize_serial_port_choices(port_infos) -> str:
+        rows = LiveLoggerGui._serial_port_choice_rows(port_infos)
+        if not rows:
+            return 'COM scan: no serial ports found.'
+        devices = ', '.join(device for _label, device in rows[:6])
+        suffix = f'; +{len(rows) - 6} more' if len(rows) > 6 else ''
+        return f'COM scan: found {len(rows)} port(s): {devices}{suffix}. Select one, then click Use for TEC or Use for Huber.'
 
     def _available_serial_port_infos(self):
         return list(list_ports.comports())
@@ -1399,15 +1448,35 @@ class LiveLoggerGui:
     def scan_serial_ports(self) -> None:
         try:
             port_infos = self._available_serial_port_infos()
-            choices = self._format_serial_port_choices(port_infos)
+            rows = self._serial_port_choice_rows(port_infos)
         except Exception as exc:
-            self.available_ports_text.set(f'COM scan: failed ({exc})')
+            self.available_ports_text.set('COM scan: failed; see Details.')
             messagebox.showerror('Scan COM Ports failed', str(exc))
             return
-        self.available_ports_text.set(
-            'COM scan results (copy a COM name into the TEC or Huber Port field, then click Detect):\n'
-            f'{choices}'
-        )
+        self.serial_port_choices = {label: device for label, device in rows}
+        values = [label for label, _device in rows]
+        self.serial_ports_combobox.configure(values=values)
+        if values:
+            self.selected_serial_port_choice.set(values[0])
+        else:
+            self.selected_serial_port_choice.set('')
+        self.available_ports_text.set(self._summarize_serial_port_choices(port_infos))
+
+    def apply_selected_serial_port(self, target: str) -> None:
+        label = self.selected_serial_port_choice.get().strip()
+        port = self.serial_port_choices.get(label)
+        if not port:
+            messagebox.showinfo('No COM port selected', 'Click Scan COM Ports, then choose a port from the dropdown first.')
+            return
+        if target == 'tec':
+            self.serial_port.set(port)
+            self.serial_autodetect.set(0)
+            self.available_ports_text.set(f'Selected {port} for TEC. Click Detect TEC to verify the connection.')
+        elif target == 'huber':
+            self.huber_port.set(port)
+            self.available_ports_text.set(f'Selected {port} for Huber. Click Detect Huber to verify the connection.')
+        else:
+            raise ValueError(f'unknown serial port target: {target}')
 
     @staticmethod
     def _candidate_tec_addresses(address_text: str) -> list[int]:
@@ -1493,38 +1562,58 @@ class LiveLoggerGui:
             self._set_tec_connection_status('red', f'TEC: not detected or connected ({exc})')
 
     def detect_huber(self) -> None:
-        adapter = None
-        try:
-            self._set_huber_connection_status('yellow', 'Huber: detecting connection')
-            adapter = HuberWorkflowAdapter(port=self.huber_port.get().strip() or None)
-            if not adapter.connect():
+        if self.huber_detect_thread and self.huber_detect_thread.is_alive():
+            return
+        port = self.huber_port.get().strip() or None
+        self._set_huber_connection_status('yellow', 'Huber: detecting connection')
+        self._set_detect_button_state(self.detect_huber_button, False)
+
+        def worker() -> None:
+            adapter = None
+            state = 'red'
+            status_text = ''
+            detected_port = None
+            try:
+                adapter = HuberWorkflowAdapter(port=port)
+                if not adapter.connect():
+                    connection = getattr(adapter, '_connection', None)
+                    detail = getattr(connection, 'last_error_message', None) or getattr(connection, 'last_error_code', None) or 'connect() returned False'
+                    raise RuntimeError(detail)
                 connection = getattr(adapter, '_connection', None)
-                detail = getattr(connection, 'last_error_message', None) or getattr(connection, 'last_error_code', None) or 'connect() returned False'
-                raise RuntimeError(detail)
-            connection = getattr(adapter, '_connection', None)
-            detected_port = getattr(connection, 'port', None)
-            if detected_port:
-                self.huber_port.set(str(detected_port))
-            hardware_client_available = bool(HUBER_HARDWARE_CLIENT_AVAILABLE)
-            bath_temp = adapter.read_bath_temp()
-            setpoint = adapter.read_setpoint()
-            detail_parts = []
-            if detected_port:
-                detail_parts.append(str(detected_port))
-            if bath_temp is not None:
-                detail_parts.append(f'bath {bath_temp:g} °C')
-            if setpoint is not None:
-                detail_parts.append(f'setpoint {setpoint:g} °C')
-            details = ', '.join(detail_parts) if detail_parts else 'no explicit port'
-            if hardware_client_available:
-                self._set_huber_connection_status('green', f'Huber: detected and connection verified ({details})')
-            else:
-                self._set_huber_connection_status('yellow', f'Huber: hardware client unavailable; simulation response only ({details})')
-        except Exception as exc:
-            self._set_huber_connection_status('red', f'Huber: not detected or connected ({exc})')
-        finally:
-            if adapter is not None:
-                adapter.close()
+                detected_port = getattr(connection, 'port', None)
+                hardware_client_available = bool(HUBER_HARDWARE_CLIENT_AVAILABLE)
+                bath_temp = adapter.read_bath_temp()
+                setpoint = adapter.read_setpoint()
+                detail_parts = []
+                if detected_port:
+                    detail_parts.append(str(detected_port))
+                if bath_temp is not None:
+                    detail_parts.append(f'bath {bath_temp:g} °C')
+                if setpoint is not None:
+                    detail_parts.append(f'setpoint {setpoint:g} °C')
+                details = ', '.join(detail_parts) if detail_parts else 'no explicit port'
+                if hardware_client_available:
+                    state = 'green'
+                    status_text = f'Huber: detected and connection verified ({details})'
+                else:
+                    state = 'yellow'
+                    status_text = f'Huber: hardware client unavailable; simulation response only ({details})'
+            except Exception as exc:
+                status_text = f'Huber: not detected or connected ({exc})'
+            finally:
+                if adapter is not None:
+                    adapter.close()
+
+            def apply_result() -> None:
+                if detected_port:
+                    self.huber_port.set(str(detected_port))
+                self._set_huber_connection_status(state, status_text)
+                self._set_detect_button_state(self.detect_huber_button, True)
+
+            self.root.after(0, apply_result)
+
+        self.huber_detect_thread = threading.Thread(target=worker, daemon=True)
+        self.huber_detect_thread.start()
 
     @staticmethod
     def _connection_color(state: str) -> str:
@@ -1542,13 +1631,35 @@ class LiveLoggerGui:
         # call sites without adding a third, redundant runtime indicator.
         return
 
+    @staticmethod
+    def _display_status_text(text: str) -> str:
+        normalized = ' '.join(str(text).split())
+        if len(normalized) <= CONNECTION_STATUS_MAX_CHARS:
+            return normalized
+        prefix = normalized.split(' (', 1)[0]
+        if prefix and len(prefix) <= CONNECTION_STATUS_MAX_CHARS - 14:
+            return f'{prefix} (see Details)'
+        return LiveLoggerGui._clip_status_text(normalized)
+
+    @staticmethod
+    def _set_detect_button_state(button, enabled: bool) -> None:
+        button.configure(state='normal' if enabled else 'disabled')
+
+    def show_tec_connection_details(self) -> None:
+        messagebox.showinfo('TEC connection details', self.last_tec_connection_detail)
+
+    def show_huber_connection_details(self) -> None:
+        messagebox.showinfo('Huber connection details', self.last_huber_connection_detail)
+
     def _set_tec_connection_status(self, state: str, text: str) -> None:
+        self.last_tec_connection_detail = str(text)
         self.tec_connection_indicator_label.configure(fg=self._connection_color(state))
-        self.tec_connection_text.set(self._clip_status_text(text))
+        self.tec_connection_text.set(self._display_status_text(text))
 
     def _set_huber_connection_status(self, state: str, text: str) -> None:
+        self.last_huber_connection_detail = str(text)
         self.huber_connection_indicator_label.configure(fg=self._connection_color(state))
-        self.huber_connection_text.set(self._clip_status_text(text))
+        self.huber_connection_text.set(self._display_status_text(text))
 
 
 def main() -> int:
