@@ -296,19 +296,25 @@ class FakeTecLogger:
 
 
 class FakeIdentifySession:
-    def __init__(self, result=None, error=None):
+    def __init__(self, result=None, error=None, results_by_address=None):
         self.result = result
         self.error = error
+        self.results_by_address = results_by_address or {}
         self.calls = []
 
     def identify(self, address):
         self.calls.append(address)
+        if address in self.results_by_address:
+            value = self.results_by_address[address]
+            if isinstance(value, Exception):
+                raise value
+            return value
         if self.error is not None:
             raise self.error
         return self.result
 
 
-def test_probe_tec_controller_keeps_port_when_address_query_fails():
+def test_probe_tec_controller_keeps_port_when_address_scan_fails():
     session = FakeIdentifySession(error=RuntimeError("timeout"))
     logger = FakeTecLogger(session)
 
@@ -316,8 +322,8 @@ def test_probe_tec_controller_keeps_port_when_address_query_fails():
 
     assert endpoint == "COM7"
     assert detected_address is None
-    assert identify_error == "timeout"
-    assert session.calls == [1]
+    assert identify_error.startswith("address scan failed (1: timeout")
+    assert session.calls[:3] == [1, 2, 3]
     assert logger.manager.exited is True
 
 
@@ -332,3 +338,28 @@ def test_probe_tec_controller_reports_address_when_identify_succeeds():
     assert identify_error is None
     assert session.calls == [2]
     assert logger.manager.exited is True
+
+
+def test_candidate_tec_addresses_prioritizes_requested_address_then_common_scan():
+    addresses = LiveLoggerGui._candidate_tec_addresses("7")
+
+    assert addresses[:4] == [7, 1, 2, 3]
+    assert addresses[-1] == 0
+
+
+def test_probe_tec_controller_finds_non_default_address_during_scan():
+    session = FakeIdentifySession(
+        results_by_address={
+            1: RuntimeError("timeout"),
+            2: RuntimeError("timeout"),
+            3: 3,
+        }
+    )
+    logger = FakeTecLogger(session, endpoint="COM9")
+
+    endpoint, detected_address, identify_error = LiveLoggerGui._probe_tec_controller(logger, "1")
+
+    assert endpoint == "COM9"
+    assert detected_address == 3
+    assert identify_error is None
+    assert session.calls == [1, 2, 3]

@@ -7,7 +7,7 @@ from collections import deque
 from datetime import datetime, timezone
 from dataclasses import asdict
 from pathlib import Path
-from tkinter import BOTH, END, LEFT, RIGHT, VERTICAL, Button, Checkbutton, Entry, Frame, IntVar, Label, Listbox, Radiobutton, Scrollbar, StringVar, Tk, filedialog, messagebox
+from tkinter import BOTH, END, LEFT, RIGHT, VERTICAL, Button, Canvas, Checkbutton, Entry, Frame, IntVar, Label, Listbox, Radiobutton, Scrollbar, StringVar, Tk, filedialog, messagebox
 
 from serial.tools import list_ports
 
@@ -46,6 +46,10 @@ UNIFIED_DEFAULT_COLUMNS = ['bath_temp_c', 'tec_actual_power_w', 'bath_setpoint_c
 CONNECTION_STATUS_WRAP_PX = 360
 CONNECTION_STATUS_MAX_CHARS = 118
 COM_SCAN_SUMMARY_WRAP_PX = 720
+WINDOW_SCREEN_MARGIN_PX = 80
+WINDOW_MIN_WIDTH_PX = 900
+WINDOW_MIN_HEIGHT_PX = 620
+TEC_ADDRESS_SCAN_LIMIT = 16
 
 
 class NoopTecAdapter:
@@ -160,7 +164,21 @@ class LiveLoggerGui:
         self._load_last_used_config_if_present()
 
     def _build_ui(self) -> None:
-        top = Frame(self.root, padx=8, pady=8)
+        self.scroll_canvas = Canvas(self.root, highlightthickness=0)
+        self.scrollbar = Scrollbar(self.root, orient=VERTICAL, command=self.scroll_canvas.yview)
+        self.scroll_canvas.configure(yscrollcommand=self.scrollbar.set)
+        self.scrollbar.pack(side=RIGHT, fill='y')
+        self.scroll_canvas.pack(side=LEFT, fill=BOTH, expand=True)
+
+        self.content_frame = Frame(self.scroll_canvas)
+        self.content_window = self.scroll_canvas.create_window((0, 0), window=self.content_frame, anchor='nw')
+        self.content_frame.bind('<Configure>', self._update_scroll_region)
+        self.scroll_canvas.bind('<Configure>', self._resize_scroll_window)
+        self.root.bind_all('<MouseWheel>', self._on_mousewheel)
+        self.root.bind_all('<Button-4>', self._on_mousewheel)
+        self.root.bind_all('<Button-5>', self._on_mousewheel)
+
+        top = Frame(self.content_frame, padx=8, pady=8)
         top.pack(fill=BOTH)
         top.grid_columnconfigure(0, weight=1)
         top.grid_columnconfigure(1, weight=2)
@@ -266,7 +284,7 @@ class LiveLoggerGui:
         runtime_frame.grid_columnconfigure(1, weight=1)
         io_frame.grid_columnconfigure(1, weight=1)
 
-        buttons = Frame(self.root, padx=8, pady=4)
+        buttons = Frame(self.content_frame, padx=8, pady=4)
         buttons.pack(fill=BOTH)
         Button(buttons, text='Start Logging', command=self.start_logging).pack(side=LEFT, padx=(0, 6))
         Button(buttons, text='Force Stop', command=self.force_stop).pack(side=LEFT, padx=(0, 6))
@@ -275,7 +293,7 @@ class LiveLoggerGui:
         Button(buttons, text='Use selection for Plot 2', command=self.apply_second_plot_selection).pack(side=LEFT, padx=(6, 0))
         Button(buttons, text='Zero TEC Output', command=self.zero_output).pack(side=LEFT, padx=(6, 0))
 
-        manual_frame = Frame(self.root, padx=8, pady=4, relief='groove', bd=1)
+        manual_frame = Frame(self.content_frame, padx=8, pady=4, relief='groove', bd=1)
         manual_frame.pack(fill=BOTH, padx=8, pady=(0, 4))
         Label(manual_frame, text='Manual Commands', font=('TkDefaultFont', 10, 'bold')).grid(row=0, column=0, columnspan=8, sticky='w')
         Label(manual_frame, textvariable=self.manual_command_status, justify=LEFT, anchor='w').grid(row=1, column=0, columnspan=8, sticky='we')
@@ -295,7 +313,7 @@ class LiveLoggerGui:
         Button(manual_frame, text='Read Huber', command=self.manual_read_huber).grid(row=3, column=5, sticky='w')
         manual_frame.grid_columnconfigure(7, weight=1)
 
-        mid = Frame(self.root, padx=8, pady=4)
+        mid = Frame(self.content_frame, padx=8, pady=4)
         mid.pack(fill=BOTH, expand=True)
         left_col = Frame(mid)
         left_col.pack(side=LEFT, fill='y', padx=(0, 8))
@@ -375,6 +393,42 @@ class LiveLoggerGui:
         recipe_frame.grid_columnconfigure(6, weight=1)
         Checkbutton(right_col, text='Show live line (default on)', variable=self.show_live_line, command=self._redraw_plot).pack(anchor='w')
         Checkbutton(right_col, text='Enable second live plot (defaults to diff voltage 1/2)', variable=self.enable_second_plot, command=self._redraw_plot).pack(anchor='w')
+        self._fit_window_to_screen()
+
+    def _update_scroll_region(self, _event=None) -> None:
+        if hasattr(self, 'scroll_canvas'):
+            self.scroll_canvas.configure(scrollregion=self.scroll_canvas.bbox('all'))
+
+    def _resize_scroll_window(self, event) -> None:
+        if hasattr(self, 'content_window'):
+            self.scroll_canvas.itemconfigure(self.content_window, width=max(event.width, WINDOW_MIN_WIDTH_PX - 24))
+
+    def _on_mousewheel(self, event) -> None:
+        if not hasattr(self, 'scroll_canvas'):
+            return
+        if getattr(event, 'num', None) == 4:
+            delta = -1
+        elif getattr(event, 'num', None) == 5:
+            delta = 1
+        else:
+            delta = -int(getattr(event, 'delta', 0) / 120)
+        if delta:
+            self.scroll_canvas.yview_scroll(delta, 'units')
+
+    def _fit_window_to_screen(self) -> None:
+        self.root.update_idletasks()
+        screen_width = max(self.root.winfo_screenwidth(), WINDOW_MIN_WIDTH_PX)
+        screen_height = max(self.root.winfo_screenheight(), WINDOW_MIN_HEIGHT_PX)
+        max_width = max(WINDOW_MIN_WIDTH_PX, screen_width - WINDOW_SCREEN_MARGIN_PX)
+        max_height = max(WINDOW_MIN_HEIGHT_PX, screen_height - WINDOW_SCREEN_MARGIN_PX)
+        requested_width = max(self.content_frame.winfo_reqwidth() + 24, WINDOW_MIN_WIDTH_PX)
+        requested_height = max(self.content_frame.winfo_reqheight() + 24, WINDOW_MIN_HEIGHT_PX)
+        width = min(requested_width, max_width)
+        height = min(requested_height, max_height)
+        x = max(0, (screen_width - width) // 2)
+        y = max(0, (screen_height - height) // 2)
+        self.root.minsize(min(WINDOW_MIN_WIDTH_PX, width), min(WINDOW_MIN_HEIGHT_PX, height))
+        self.root.geometry(f'{int(width)}x{int(height)}+{int(x)}+{int(y)}')
 
     @staticmethod
     def _parse_numeric_field(text: str, label: str) -> float:
@@ -1357,36 +1411,77 @@ class LiveLoggerGui:
         )
 
     @staticmethod
+    def _candidate_tec_addresses(address_text: str) -> list[int]:
+        candidates: list[int] = []
+        raw_text = str(address_text).strip()
+        if raw_text:
+            try:
+                requested_address = int(raw_text)
+            except ValueError:
+                requested_address = None
+            if requested_address is not None:
+                candidates.append(requested_address)
+        for address in list(range(1, TEC_ADDRESS_SCAN_LIMIT + 1)) + [0]:
+            if address not in candidates:
+                candidates.append(address)
+        return candidates
+
+    @staticmethod
+    def _summarize_identify_errors(errors: list[tuple[int, str]]) -> str | None:
+        if not errors:
+            return None
+        shown = ', '.join(f'{address}: {error}' for address, error in errors[:3])
+        suffix = f'; +{len(errors) - 3} more' if len(errors) > 3 else ''
+        return f'address scan failed ({shown}{suffix})'
+
+    @staticmethod
     def _probe_tec_controller(logger: LiveLogger, address_text: str) -> tuple[str | None, object | None, str | None]:
-        """Open the TEC serial session and optionally query the controller address.
+        """Open the TEC serial session and scan common controller addresses.
 
         The standalone TEC-only GUI treats a successful MeCom serial open as a
         successful detection.  Keep that behavior here so a device is still
-        recognized when the optional address query is blocked by an unexpected
-        address, firmware response, or transient timeout.
+        recognized when address queries are blocked by unexpected addresses,
+        firmware responses, or transient timeouts.
         """
         session_manager, endpoint = logger._open_session()
         detected_address = None
         identify_error = None
+        errors: list[tuple[int, str]] = []
         with session_manager as session:
-            try:
-                address = int(str(address_text).strip())
-                detected_address = session.identify(address=address)
-            except Exception as exc:
-                identify_error = str(exc)
+            for address in LiveLoggerGui._candidate_tec_addresses(address_text):
+                try:
+                    detected_address = session.identify(address=address)
+                    identify_error = None
+                    break
+                except Exception as exc:
+                    errors.append((address, str(exc)))
+            else:
+                identify_error = LiveLoggerGui._summarize_identify_errors(errors)
         return endpoint, detected_address, identify_error
 
     def detect_controller(self) -> None:
         try:
             self._set_controller_status('yellow', 'Controller status: connecting (detecting TEC)')
             self._set_tec_connection_status('yellow', 'TEC: detecting connection')
-            endpoint, detected_address, identify_error = self._probe_tec_controller(LiveLogger(self._build_config()), self.address.get())
+            address_text = self.address.get()
+            try:
+                int(str(address_text).strip())
+            except ValueError:
+                self.address.set('1')
+                try:
+                    logger = LiveLogger(self._build_config())
+                finally:
+                    self.address.set(address_text)
+            else:
+                logger = LiveLogger(self._build_config())
+            endpoint, detected_address, identify_error = self._probe_tec_controller(logger, address_text)
             if endpoint:
                 self.serial_port.set(str(endpoint))
                 # After a successful port probe, keep using the explicit port so
                 # future starts do not depend on fragile autodetection ordering.
                 self.serial_autodetect.set(0)
             if detected_address is not None:
+                self.address.set(str(detected_address))
                 detail = f'{endpoint}, address {detected_address}'
                 self._set_controller_status('green', f'Controller status: connected ({detail})')
                 self._set_tec_connection_status('green', f'TEC: detected and connection verified ({detail})')
