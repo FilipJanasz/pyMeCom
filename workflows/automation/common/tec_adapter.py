@@ -41,14 +41,19 @@ class TecPowerAdapter:
     def set_power(self, power_w: float) -> None:
         if self._controller is None:
             raise RuntimeError("TEC adapter not connected")
+        if float(power_w) != 0.0:
+            raise RuntimeError(
+                "TEC power setpoint writes are not supported by this workflow. "
+                "Provide tec_voltage_v and tec_current_a instead; tec_power_w is used for preview/logging."
+            )
         self._controller.apply_step(
             CalibrationStep(
-                name="unified_step",
-                power=float(power_w),
+                name="unified_zero_power",
+                power=0.0,
                 dwell_seconds=1,
                 set_voltage=0.0,
                 set_current=0.0,
-                enable_output=bool(power_w != 0.0),
+                enable_output=False,
             )
         )
 
@@ -72,7 +77,9 @@ class TecPowerAdapter:
         return self._session.get_parameter(parameter_name="Actual Output Power", address=self.config.address, parameter_instance=self.config.channel)
 
     def safe_output(self, power_w: float = 0.0) -> None:
-        self.set_power(power_w)
+        # Hardware-safe shutdown uses the known-working voltage/current path.
+        self.set_voltage_current(0.0, 0.0)
+        self.set_power(0.0)
 
     def close(self) -> None:
         if self._session_manager is not None:

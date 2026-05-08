@@ -159,6 +159,12 @@ class ThermostatConnection:
         except (serial.SerialException, OSError, ValueError) as e:
             self._set_error("HUBER_THERMOREG_ERROR", f"Failed to set thermoregulation to {state}: {e}")
             return False
+
+    def start_process(self) -> bool:
+        return self.set_thermoregulation(True)
+
+    def stop_process(self) -> bool:
+        return self.set_thermoregulation(False)
     
     def close(self):
         if self.serial_conn:

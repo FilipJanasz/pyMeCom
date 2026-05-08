@@ -51,12 +51,17 @@ class FakeBathAdapter:
         self.temp = 24.8
         self.closed = False
         self.pump_state = None
+        self.process_started = False
 
     def connect(self):
         return True
 
     def set_setpoint(self, setpoint_c):
         self.setpoint = setpoint_c
+        return True
+
+    def start_process(self):
+        self.process_started = True
         return True
 
     def read_bath_temp(self):
@@ -82,6 +87,16 @@ def test_normal_progression(tmp_path: Path):
     assert paths.csv_path.exists()
     metadata = json.loads(paths.metadata_path.read_text())
     assert metadata["engine_state"] == "COMPLETED"
+
+
+def test_huber_setpoint_starts_process(tmp_path: Path):
+    cfg = RunConfig.from_dict({"steps": [{"name": "bath", "bath_setpoint_c": 22, "duration_s": 0.05}]})
+    bath = FakeBathAdapter()
+    engine = DualDeviceRunEngine(FakeTecAdapter(), bath, tmp_path, sample_hz=30)
+
+    engine.run(cfg)
+
+    assert bath.process_started is True
 
 
 def test_stop_mid_run_transitions_to_completed(tmp_path: Path):

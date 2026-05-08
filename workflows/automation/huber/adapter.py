@@ -49,6 +49,22 @@ class HuberWorkflowAdapter:
         self._log("huber_adapter_set_setpoint", temp_c=temp_c, ok=ok, error_code=self._connection.last_error_code)
         return ok
 
+    def start_process(self) -> bool:
+        if hasattr(self._connection, "set_thermoregulation"):
+            ok = bool(self._connection.set_thermoregulation(True))
+            self._log("huber_adapter_start_process", ok=ok, error_code=self._connection.last_error_code)
+            return ok
+        self._warn("huber_adapter_start_process_unsupported")
+        return False
+
+    def stop_process(self) -> bool:
+        if hasattr(self._connection, "set_thermoregulation"):
+            ok = bool(self._connection.set_thermoregulation(False))
+            self._log("huber_adapter_stop_process", ok=ok, error_code=self._connection.last_error_code)
+            return ok
+        self._warn("huber_adapter_stop_process_unsupported")
+        return False
+
     def set_pump_state(self, on_off: bool) -> bool:
         if hasattr(self._connection.thermostat, "set_pump_state"):
             ok = bool(self._connection.thermostat.set_pump_state(on_off))
