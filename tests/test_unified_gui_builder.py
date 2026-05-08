@@ -363,3 +363,29 @@ def test_probe_tec_controller_finds_non_default_address_during_scan():
     assert detected_address == 3
     assert identify_error is None
     assert session.calls == [1, 2, 3]
+
+
+def test_window_geometry_fits_standard_laptop_screen_with_margin():
+    geometry, min_width, min_height = LiveLoggerGui._window_geometry_for_screen(
+        screen_width=1366,
+        screen_height=768,
+        requested_width=1600,
+        requested_height=1200,
+    )
+
+    assert geometry == "1286x688+40+40"
+    assert min_width == 900
+    assert min_height == 560
+
+
+def test_window_geometry_uses_small_margin_when_screen_is_below_minimums():
+    geometry, min_width, min_height = LiveLoggerGui._window_geometry_for_screen(
+        screen_width=800,
+        screen_height=600,
+        requested_width=1200,
+        requested_height=900,
+    )
+
+    assert geometry == "776x576+12+12"
+    assert min_width == 776
+    assert min_height == 560
