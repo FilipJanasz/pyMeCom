@@ -1,0 +1,22 @@
+{
+  "run_name": "huber_only_bath_demo",
+  "steps": [
+    {
+      "name": "bath_25c",
+      "bath_setpoint_c": 25.0,
+      "duration_s": 300,
+      "progression_mode": "time"
+    },
+    {
+      "name": "bath_30c",
+      "bath_setpoint_c": 30.0,
+      "duration_s": 300,
+      "progression_mode": "time"
+    }
+  ],
+  "safety": {
+    "tec_power_w_on_stop": 0.0,
+    "bath_standby_setpoint_c": 25.0,
+    "pump_on_in_safe_state": true
+  }
+}
