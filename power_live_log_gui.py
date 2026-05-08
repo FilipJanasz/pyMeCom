@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 import threading
+import time
 from collections import deque
 from datetime import datetime, timezone
 from dataclasses import asdict
@@ -169,6 +170,13 @@ class LiveLoggerGui:
         self.last_huber_connection_detail = 'Huber: not checked'
         self.huber_detect_thread: threading.Thread | None = None
         self.sample_rate_text = StringVar(value='Measured acquisition rate: n/a')
+        self.run_recipe_summary_text = StringVar(value='Recipe to run: no JSON loaded')
+        self.run_progress_text = StringVar(value='Progress: idle')
+        self.run_eta_text = StringVar(value='Done at: n/a')
+        self.loaded_run_total_seconds = 0.0
+        self._run_started_at_epoch: float | None = None
+        self._current_run_duration_s: float | None = None
+        self._progress_update_job = None
         self._last_sample_ts: float | None = None
 
         self._build_ui()
@@ -192,14 +200,16 @@ class LiveLoggerGui:
         self.notebook = Notebook(self.content_frame)
         self.notebook.pack(fill=BOTH, expand=True, padx=8, pady=8)
         self.run_tab = Frame(self.notebook)
-        self.json_tab = Frame(self.notebook)
+        self.example_loader_tab = Frame(self.notebook)
+        self.example_editor_tab = Frame(self.notebook)
         self.manual_tab = Frame(self.notebook)
         self.notebook.add(self.run_tab, text='Run Setup')
-        self.notebook.add(self.json_tab, text='JSON Example Editor')
+        self.notebook.add(self.example_loader_tab, text='Example Loader')
+        self.notebook.add(self.example_editor_tab, text='Example Editor')
         self.notebook.add(self.manual_tab, text='Manual Commands')
 
         top = Frame(self.run_tab, padx=8, pady=8)
-        top.pack(fill=BOTH)
+        top.pack(fill=BOTH, padx=4, pady=(4, 0))
         top.grid_columnconfigure(0, weight=3, uniform='run_setup_top')
         top.grid_columnconfigure(1, weight=2, uniform='run_setup_top')
         top.grid_rowconfigure(0, weight=1)
@@ -222,7 +232,7 @@ class LiveLoggerGui:
         conn_frame.grid(row=0, column=0, sticky='nsew', padx=(0, 4))
         runtime_frame = Frame(top, padx=4, pady=4, relief='groove', bd=1)
         runtime_frame.grid(row=0, column=1, sticky='nsew', padx=(4, 0))
-        io_frame = Frame(self.json_tab, padx=8, pady=8)
+        io_frame = Frame(self.example_loader_tab, padx=8, pady=8)
         io_frame.pack(fill=BOTH, expand=True)
 
         Label(conn_frame, text='Connection Detection', font=('TkDefaultFont', 10, 'bold')).grid(row=0, column=0, columnspan=4, sticky='w')
@@ -294,6 +304,18 @@ class LiveLoggerGui:
         Checkbutton(runtime_frame, text='Pump ON in safe state', variable=self.pump_safe_on).grid(row=8, column=1, columnspan=2, sticky='w')
         Label(runtime_frame, text='(stop/error: keep bath pump running)').grid(row=9, column=1, columnspan=3, sticky='w')
 
+        run_progress_frame = Frame(self.run_tab, padx=8, pady=4, relief='groove', bd=1)
+        run_progress_frame.pack(fill=BOTH, padx=12, pady=(4, 0))
+        run_progress_frame.grid_columnconfigure(0, weight=1)
+        run_progress_frame.grid_columnconfigure(1, weight=0)
+        Label(run_progress_frame, text='Recipe preview for next run', font=('TkDefaultFont', 9, 'bold')).grid(row=0, column=0, sticky='w')
+        Label(run_progress_frame, textvariable=self.run_recipe_summary_text, justify=LEFT, anchor='w').grid(row=1, column=0, sticky='we')
+        Label(run_progress_frame, textvariable=self.run_progress_text, justify=LEFT, anchor='w').grid(row=2, column=0, sticky='we')
+        Label(run_progress_frame, textvariable=self.run_eta_text, justify=LEFT, anchor='w').grid(row=3, column=0, sticky='we')
+        self.run_preview_canvas = Canvas(run_progress_frame, width=320, height=78, bg='white', highlightthickness=1, highlightbackground='gray70')
+        self.run_preview_canvas.grid(row=0, column=1, rowspan=4, sticky='e', padx=(8, 0))
+        self._redraw_run_preview()
+
         Label(io_frame, text='Config JSON').grid(row=1, column=0, sticky='w')
         Entry(io_frame, textvariable=self.config_path, width=44).grid(row=1, column=1, columnspan=4, sticky='we')
         Button(io_frame, text='Browse', command=self.browse_config).grid(row=2, column=1, sticky='w')
@@ -317,8 +339,8 @@ class LiveLoggerGui:
         runtime_frame.grid_columnconfigure(1, weight=1)
         io_frame.grid_columnconfigure(1, weight=1)
 
-        buttons = Frame(self.content_frame, padx=8, pady=4)
-        buttons.pack(fill=BOTH)
+        buttons = Frame(self.run_tab, padx=8, pady=4)
+        buttons.pack(fill=BOTH, padx=4)
         Button(buttons, text='Start Logging', command=self.start_logging).pack(side=LEFT, padx=(0, 6))
         Button(buttons, text='Force Stop', command=self.force_stop).pack(side=LEFT, padx=(0, 6))
         Button(buttons, text='Select Columns for Live Plot', command=self.apply_plot_selection).pack(side=LEFT)
@@ -370,14 +392,14 @@ class LiveLoggerGui:
         self.request_canvas = None
         self.request_figure = None
         if Figure is not None:
-            self.figure = Figure(figsize=(8, 3.6), dpi=100)
+            self.figure = Figure(figsize=(7.2, 2.4), dpi=100)
             self.axis = self.figure.add_subplot(111)
             self.canvas = FigureCanvasTkAgg(self.figure, master=self.plot_frame)
             self.canvas.get_tk_widget().pack(fill=BOTH, expand=True)
             self.axis.set_title('Live plot (select columns then start)')
             self.axis.set_xlabel('Timestamp (UTC)')
             self.axis.grid(True, which='major', linestyle='--', alpha=0.6)
-            self.request_figure = Figure(figsize=(5.5, 2.8), dpi=100)
+            self.request_figure = Figure(figsize=(5.5, 2.0), dpi=100)
             self.request_axes = self.request_figure.subplots(2, 1, sharex=True)
             self.request_canvas = FigureCanvasTkAgg(self.request_figure, master=self.request_plot_frame)
             self.request_canvas.get_tk_widget().pack(fill=BOTH, expand=True)
@@ -390,8 +412,8 @@ class LiveLoggerGui:
             self.canvas.draw_idle()
             self.request_canvas.draw_idle()
         Checkbutton(io_frame, text='Show requested input line', variable=self.show_requested_line, command=self._redraw_requested_input_plot).grid(row=10, column=0, columnspan=2, sticky='w')
-        recipe_frame = Frame(io_frame, padx=4, pady=4, relief='groove', bd=1)
-        recipe_frame.grid(row=11, column=0, columnspan=5, sticky='nsew', pady=(8, 0))
+        recipe_frame = Frame(self.example_editor_tab, padx=8, pady=8)
+        recipe_frame.pack(fill=BOTH, expand=True)
         Label(recipe_frame, text='Recipe Builder (click preview points or edit table rows)', font=('TkDefaultFont', 9, 'bold')).grid(row=0, column=0, columnspan=7, sticky='w')
         Label(recipe_frame, text='Name').grid(row=1, column=0, sticky='w')
         Entry(recipe_frame, textvariable=self.recipe_step_name, width=12).grid(row=1, column=1, sticky='w')
@@ -406,7 +428,7 @@ class LiveLoggerGui:
         Button(recipe_frame, text='Add/Update Step', command=self.recipe_add_or_update_step).grid(row=3, column=0, columnspan=2, sticky='w')
         Button(recipe_frame, text='Delete Step', command=self.recipe_delete_selected_step).grid(row=3, column=2, sticky='w')
         Button(recipe_frame, text='Save Recipe JSON', command=self.save_recipe_config).grid(row=3, column=3, columnspan=2, sticky='w')
-        self.recipe_list = Listbox(recipe_frame, height=5, width=72, exportselection=False)
+        self.recipe_list = Listbox(recipe_frame, height=4, width=72, exportselection=False)
         self.recipe_list.grid(row=4, column=0, columnspan=7, sticky='we', pady=(4, 0))
         self.recipe_list.bind('<<ListboxSelect>>', self._recipe_selection_changed)
         self.recipe_plot_frame = Frame(recipe_frame)
@@ -415,7 +437,7 @@ class LiveLoggerGui:
         self.recipe_axes = None
         self.recipe_canvas = None
         if Figure is not None:
-            self.recipe_figure = Figure(figsize=(5.5, 2.8), dpi=100)
+            self.recipe_figure = Figure(figsize=(5.5, 2.1), dpi=100)
             self.recipe_axes = self.recipe_figure.subplots(2, 1, sharex=True)
             self.recipe_canvas = FigureCanvasTkAgg(self.recipe_figure, master=self.recipe_plot_frame)
             self.recipe_canvas.get_tk_widget().pack(fill=BOTH, expand=True)
@@ -445,6 +467,147 @@ class LiveLoggerGui:
             delta = -int(getattr(event, 'delta', 0) / 120)
         if delta:
             self.scroll_canvas.yview_scroll(delta, 'units')
+
+    def _format_seconds(self, seconds: float | None) -> str:
+        if seconds is None:
+            return 'n/a'
+        seconds = max(0, int(round(seconds)))
+        hours, remainder = divmod(seconds, 3600)
+        minutes, secs = divmod(remainder, 60)
+        if hours:
+            return f'{hours:d}:{minutes:02d}:{secs:02d}'
+        return f'{minutes:d}:{secs:02d}'
+
+    def _format_done_at(self, started_at: float | None, remaining_s: float | None) -> str:
+        if started_at is None or remaining_s is None:
+            return 'Done at: n/a'
+        done_at = datetime.fromtimestamp(time.time() + max(0.0, remaining_s))
+        return f"Done at: {done_at:%Y-%m-%d %H:%M:%S}"
+
+    def _loaded_recipe_label(self) -> str:
+        path = self.config_path.get().strip()
+        name = Path(path).name if path else 'no JSON loaded'
+        mode = self.detected_mode.get().strip() or self.run_mode.get().strip() or 'unknown mode'
+        total = self.loaded_run_total_seconds or self._duration_seconds_or_none() or 0.0
+        curves = []
+        if self.loaded_schedule_points:
+            curves.append('TEC')
+        if self.loaded_temp_schedule_points:
+            curves.append('Huber')
+        curve_text = '+'.join(curves) if curves else 'no previewable setpoints'
+        duration_text = self._format_seconds(total) if total else 'n/a'
+        return f'Recipe to run: {name} | {mode} | {curve_text} | total {duration_text}'
+
+    def _duration_seconds_or_none(self) -> float | None:
+        try:
+            text = self.duration.get().strip()
+            if not text:
+                return None
+            value = float(text)
+        except Exception:
+            return None
+        return value if value > 0 else None
+
+    def _set_run_progress_idle(self, message: str = 'Progress: idle') -> None:
+        self._run_started_at_epoch = None
+        self._current_run_duration_s = None
+        self.run_progress_text.set(message)
+        self.run_eta_text.set('Done at: n/a')
+        self._redraw_run_preview(progress_fraction=0.0)
+
+    def _start_run_progress(self, total_seconds: float | None) -> None:
+        self._run_started_at_epoch = time.time()
+        self._current_run_duration_s = total_seconds if total_seconds and total_seconds > 0 else None
+        self._update_run_progress_indicator()
+
+    def _finish_run_progress(self, message: str) -> None:
+        if self._progress_update_job is not None:
+            try:
+                self.root.after_cancel(self._progress_update_job)
+            except Exception:
+                pass
+            self._progress_update_job = None
+        elapsed = None if self._run_started_at_epoch is None else time.time() - self._run_started_at_epoch
+        total = self._current_run_duration_s
+        if total:
+            self._redraw_run_preview(progress_fraction=1.0)
+            self.run_progress_text.set(f'{message} | elapsed {self._format_seconds(elapsed)} of {self._format_seconds(total)}')
+        else:
+            self.run_progress_text.set(f'{message} | elapsed {self._format_seconds(elapsed)}')
+        self.run_eta_text.set('Done at: n/a')
+        self._run_started_at_epoch = None
+        self._current_run_duration_s = None
+
+    def _update_run_progress_indicator(self) -> None:
+        if self._run_started_at_epoch is None:
+            return
+        elapsed = time.time() - self._run_started_at_epoch
+        total = self._current_run_duration_s
+        if total:
+            remaining = max(0.0, total - elapsed)
+            fraction = min(1.0, max(0.0, elapsed / total))
+            self.run_progress_text.set(
+                f'Progress: elapsed {self._format_seconds(elapsed)} / {self._format_seconds(total)} | remaining {self._format_seconds(remaining)}'
+            )
+            self.run_eta_text.set(self._format_done_at(self._run_started_at_epoch, remaining))
+            self._redraw_run_preview(progress_fraction=fraction)
+        else:
+            self.run_progress_text.set(f'Progress: elapsed {self._format_seconds(elapsed)} | remaining n/a (open-ended run)')
+            self.run_eta_text.set('Done at: n/a')
+            self._redraw_run_preview(progress_fraction=0.0)
+        self._progress_update_job = self.root.after(1000, self._update_run_progress_indicator)
+
+    def _redraw_run_preview(self, progress_fraction: float | None = None) -> None:
+        canvas = getattr(self, 'run_preview_canvas', None)
+        if canvas is None:
+            return
+        canvas.delete('all')
+        width = int(canvas.winfo_width() or 320)
+        height = int(canvas.winfo_height() or 78)
+        pad_x = 24
+        top = 10
+        mid = height // 2
+        bottom = height - 16
+        plot_w = max(1, width - (2 * pad_x))
+        canvas.create_text(6, top + 4, text='TEC', anchor='w', fill='orange')
+        canvas.create_text(6, bottom - 2, text='Bath', anchor='w', fill='blue')
+        canvas.create_line(pad_x, mid, width - pad_x, mid, fill='gray85')
+        max_t = self.loaded_run_total_seconds or 0.0
+        all_values = [v for _, v in self.loaded_schedule_points] + [v for _, v in self.loaded_temp_schedule_points]
+        if max_t <= 0 or not all_values:
+            canvas.create_text(width // 2, mid, text='Load JSON to preview recipe', fill='gray45')
+        else:
+            def scale_x(t: float) -> float:
+                return pad_x + (float(t) / max_t) * plot_w
+
+            def draw_curve(points: list[tuple[float, float]], color: str, y_min: int, y_max: int) -> None:
+                if not points:
+                    return
+                vals = [v for _, v in points]
+                lo = min(vals)
+                hi = max(vals)
+                span = hi - lo if hi != lo else 1.0
+                coords = []
+                for t, value in points:
+                    x = scale_x(t)
+                    y = y_max - ((value - lo) / span) * (y_max - y_min)
+                    coords.extend((x, y))
+                if len(coords) >= 4:
+                    canvas.create_line(*coords, fill=color, width=2)
+                for x, y in zip(coords[0::2], coords[1::2]):
+                    canvas.create_oval(x - 2, y - 2, x + 2, y + 2, fill=color, outline=color)
+
+            draw_curve(self.loaded_schedule_points, 'orange', top + 2, mid - 4)
+            draw_curve(self.loaded_temp_schedule_points, 'blue', mid + 4, bottom)
+        if progress_fraction is None:
+            progress_fraction = 0.0 if self._run_started_at_epoch is None else None
+            if progress_fraction is None and self._current_run_duration_s:
+                progress_fraction = min(1.0, max(0.0, (time.time() - self._run_started_at_epoch) / self._current_run_duration_s))
+        progress_fraction = 0.0 if progress_fraction is None else min(1.0, max(0.0, progress_fraction))
+        x = pad_x + progress_fraction * plot_w
+        canvas.create_line(x, top, x, bottom, fill='red', width=2)
+        canvas.create_text(pad_x, height - 3, text='0', anchor='sw', fill='gray40')
+        canvas.create_text(width - pad_x, height - 3, text=self._format_seconds(max_t) if max_t else 'n/a', anchor='se', fill='gray40')
 
     def _fit_window_to_screen(self) -> None:
         self.root.update_idletasks()
@@ -781,6 +944,9 @@ class LiveLoggerGui:
             messagebox.showerror('Load JSON failed', str(exc))
             return
         self._load_requested_input_from_config(path_text)
+        if hasattr(self, 'run_recipe_summary_text'):
+            self.run_recipe_summary_text.set(self._loaded_recipe_label())
+        self._redraw_run_preview()
         self._remember_last_config_path(path_text)
 
     def _detect_mode_from_content(self, content: dict) -> str:
@@ -892,9 +1058,13 @@ class LiveLoggerGui:
             self.loaded_schedule_points = []
             self.loaded_temp_schedule_points = []
             total_duration = 0.0
+        self.loaded_run_total_seconds = total_duration
         if total_duration > 0.0:
             self.duration.set(f'{total_duration:g}')
+        if hasattr(self, 'run_recipe_summary_text'):
+            self.run_recipe_summary_text.set(self._loaded_recipe_label())
         self._redraw_requested_input_plot()
+        self._redraw_run_preview()
 
     def _parse_curve_values(self, text: str, name: str, *, required: bool = True) -> list[float]:
         parts = [p.strip() for p in text.split(',') if p.strip()]
@@ -1100,6 +1270,7 @@ class LiveLoggerGui:
 
         self.animating = True
         self._schedule_plot_refresh()
+        self._start_run_progress(cfg.duration_seconds or self.loaded_run_total_seconds or None)
 
         def on_started(path: Path) -> None:
             self.last_output_csv = path
@@ -1133,6 +1304,7 @@ class LiveLoggerGui:
                 self.live_data.setdefault(col, deque(maxlen=MAX_POINTS)).append(val)
 
         def worker() -> None:
+            failed = False
             try:
                 LiveLogger(cfg).run(
                     hz=hz,
@@ -1142,15 +1314,20 @@ class LiveLoggerGui:
                     stop_requested=lambda: self.stop_requested,
                 )
             except Exception as exc:
+                failed = True
                 error_message = self._format_run_error(exc)
+                self.root.after(0, lambda: self._finish_run_progress('Progress: failed'))
                 self.root.after(0, lambda e=exc: self._set_controller_status('red', f'Controller status: not detected ({e})'))
                 self.root.after(0, lambda e=exc: self._set_tec_connection_status('red', f'TEC: not connected ({e})'))
                 self.root.after(0, lambda msg=error_message: messagebox.showerror('Run failed', msg))
             finally:
                 self.animating = False
                 if self.stop_requested:
+                    self.root.after(0, lambda: self._finish_run_progress('Progress: stopped'))
                     self.root.after(0, lambda: self._set_controller_status('yellow', 'Controller status: stopped by user'))
                     self.root.after(0, lambda: self._set_tec_connection_status('yellow', 'TEC: stopped by user'))
+                elif not failed:
+                    self.root.after(0, lambda: self._finish_run_progress('Progress: complete'))
 
         self.run_thread = threading.Thread(target=worker, daemon=True)
         self.run_thread.start()
@@ -1168,6 +1345,7 @@ class LiveLoggerGui:
         self._configure_live_plot_columns(UNIFIED_LIVE_COLUMNS, UNIFIED_DEFAULT_COLUMNS)
         self.animating = True
         self._schedule_plot_refresh()
+        self._start_run_progress(sum(step.duration_s for step in run_cfg.steps))
         has_any_tec_request = any(
             step.tec_power_w is not None or step.tec_voltage_v is not None or step.tec_current_a is not None
             for step in run_cfg.steps
@@ -1223,14 +1401,17 @@ class LiveLoggerGui:
                 self.root.after(0, lambda: self._set_controller_status('yellow', f'Controller status: connecting ({display_mode} run)'))
                 paths = engine.run(run_cfg, legacy_power_policy=LegacyPowerPolicy.ALLOW_ZERO_POWER.value, event_callback=on_event, row_callback=on_row)
                 if getattr(engine.state, 'value', str(engine.state)) == 'ERROR':
+                    self.root.after(0, lambda: self._finish_run_progress('Progress: failed'))
                     self.root.after(0, lambda p=paths.csv_path.name: self._set_controller_status('red', f'Controller status: {display_mode} run ended in ERROR ({p})'))
                 else:
+                    self.root.after(0, lambda: self._finish_run_progress('Progress: complete'))
                     self.root.after(0, lambda p=paths.csv_path.name: self._set_controller_status('green', f'Controller status: {display_mode} run complete ({p})'))
                     if has_any_tec_request:
                         self.root.after(0, lambda: self._set_tec_connection_status('green', 'TEC: connected (unified run complete)'))
                     if has_any_huber_request:
                         self.root.after(0, lambda: self._set_huber_connection_status('green', 'Huber: connected (unified run complete)'))
             except Exception as exc:
+                self.root.after(0, lambda: self._finish_run_progress('Progress: failed'))
                 self.root.after(0, lambda e=exc: self._set_controller_status('red', f'Controller status: {display_mode} run failed ({e})'))
                 if has_any_tec_request:
                     self.root.after(0, lambda e=exc: self._set_tec_connection_status('red', f'TEC: failed ({e})'))
