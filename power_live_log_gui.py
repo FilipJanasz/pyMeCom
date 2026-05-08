@@ -44,12 +44,13 @@ UNIFIED_LIVE_COLUMNS = [
     'tec_current_a',
 ]
 UNIFIED_DEFAULT_COLUMNS = ['bath_temp_c', 'tec_actual_power_w', 'bath_setpoint_c', 'tec_power_w']
-CONNECTION_STATUS_WRAP_PX = 360
-CONNECTION_STATUS_MAX_CHARS = 118
-COM_SCAN_SUMMARY_WRAP_PX = 720
+CONNECTION_STATUS_WRAP_PX = 300
+CONNECTION_STATUS_MAX_CHARS = 96
+COM_SCAN_SUMMARY_WRAP_PX = 620
 WINDOW_SCREEN_MARGIN_PX = 80
 WINDOW_MIN_WIDTH_PX = 900
-WINDOW_MIN_HEIGHT_PX = 620
+WINDOW_MIN_HEIGHT_PX = 560
+WINDOW_SMALL_SCREEN_MARGIN_PX = 24
 TEC_ADDRESS_SCAN_LIMIT = 16
 
 
@@ -195,10 +196,9 @@ class LiveLoggerGui:
 
         top = Frame(self.run_tab, padx=8, pady=8)
         top.pack(fill=BOTH)
-        top.grid_columnconfigure(0, weight=1)
-        top.grid_columnconfigure(1, weight=2)
-        top.grid_rowconfigure(0, weight=0)
-        top.grid_rowconfigure(1, weight=1)
+        top.grid_columnconfigure(0, weight=3, uniform='run_setup_top')
+        top.grid_columnconfigure(1, weight=2, uniform='run_setup_top')
+        top.grid_rowconfigure(0, weight=1)
 
         def add_row(parent: Frame, label: str, var, row: int, width: int = 42):
             Label(parent, text=label).grid(row=row, column=0, sticky='w')
@@ -216,7 +216,7 @@ class LiveLoggerGui:
         conn_frame = Frame(top, padx=4, pady=4, relief='groove', bd=1)
         conn_frame.grid(row=0, column=0, sticky='nsew', padx=(0, 4))
         runtime_frame = Frame(top, padx=4, pady=4, relief='groove', bd=1)
-        runtime_frame.grid(row=1, column=0, sticky='nsew', padx=(0, 4), pady=(8, 0))
+        runtime_frame.grid(row=0, column=1, sticky='nsew', padx=(4, 0))
         io_frame = Frame(self.json_tab, padx=8, pady=8)
         io_frame.pack(fill=BOTH, expand=True)
 
@@ -332,7 +332,7 @@ class LiveLoggerGui:
         left_col.pack(side=LEFT, fill='y', padx=(0, 8))
         Label(left_col, text='Columns to plot').pack(anchor='w')
         scroller = Scrollbar(left_col, orient=VERTICAL)
-        self.columns_list = Listbox(left_col, selectmode='extended', yscrollcommand=scroller.set, height=8, width=24, exportselection=False)
+        self.columns_list = Listbox(left_col, selectmode='extended', yscrollcommand=scroller.set, height=6, width=24, exportselection=False)
         scroller.config(command=self.columns_list.yview)
         self.columns_list.pack(side=LEFT, fill='y')
         self.columns_list.bind('<Double-Button-1>', self._apply_double_clicked_column)
@@ -352,7 +352,7 @@ class LiveLoggerGui:
         self.request_canvas = None
         self.request_figure = None
         if Figure is not None:
-            self.figure = Figure(figsize=(9, 5), dpi=100)
+            self.figure = Figure(figsize=(8, 3.6), dpi=100)
             self.axis = self.figure.add_subplot(111)
             self.canvas = FigureCanvasTkAgg(self.figure, master=self.plot_frame)
             self.canvas.get_tk_widget().pack(fill=BOTH, expand=True)
@@ -414,7 +414,7 @@ class LiveLoggerGui:
 
     def _resize_scroll_window(self, event) -> None:
         if hasattr(self, 'content_window'):
-            self.scroll_canvas.itemconfigure(self.content_window, width=max(event.width, WINDOW_MIN_WIDTH_PX - 24))
+            self.scroll_canvas.itemconfigure(self.content_window, width=max(1, event.width))
 
     def _on_mousewheel(self, event) -> None:
         if not hasattr(self, 'scroll_canvas'):
@@ -430,18 +430,37 @@ class LiveLoggerGui:
 
     def _fit_window_to_screen(self) -> None:
         self.root.update_idletasks()
-        screen_width = max(self.root.winfo_screenwidth(), WINDOW_MIN_WIDTH_PX)
-        screen_height = max(self.root.winfo_screenheight(), WINDOW_MIN_HEIGHT_PX)
-        max_width = max(WINDOW_MIN_WIDTH_PX, screen_width - WINDOW_SCREEN_MARGIN_PX)
-        max_height = max(WINDOW_MIN_HEIGHT_PX, screen_height - WINDOW_SCREEN_MARGIN_PX)
-        requested_width = max(self.content_frame.winfo_reqwidth() + 24, WINDOW_MIN_WIDTH_PX)
-        requested_height = max(self.content_frame.winfo_reqheight() + 24, WINDOW_MIN_HEIGHT_PX)
-        width = min(requested_width, max_width)
-        height = min(requested_height, max_height)
+        geometry, min_width, min_height = self._window_geometry_for_screen(
+            screen_width=self.root.winfo_screenwidth(),
+            screen_height=self.root.winfo_screenheight(),
+            requested_width=self.content_frame.winfo_reqwidth() + 24,
+            requested_height=self.content_frame.winfo_reqheight() + 24,
+        )
+        self.root.minsize(min_width, min_height)
+        self.root.geometry(geometry)
+
+    @staticmethod
+    def _window_geometry_for_screen(
+        screen_width: int,
+        screen_height: int,
+        requested_width: int,
+        requested_height: int,
+    ) -> tuple[str, int, int]:
+        usable_width = max(320, screen_width - WINDOW_SCREEN_MARGIN_PX)
+        usable_height = max(240, screen_height - WINDOW_SCREEN_MARGIN_PX)
+        if usable_width < WINDOW_MIN_WIDTH_PX or usable_height < WINDOW_MIN_HEIGHT_PX:
+            usable_width = max(320, screen_width - WINDOW_SMALL_SCREEN_MARGIN_PX)
+            usable_height = max(240, screen_height - WINDOW_SMALL_SCREEN_MARGIN_PX)
+
+        preferred_width = max(requested_width, WINDOW_MIN_WIDTH_PX)
+        preferred_height = max(requested_height, WINDOW_MIN_HEIGHT_PX)
+        width = min(preferred_width, usable_width)
+        height = min(preferred_height, usable_height)
+        min_width = min(WINDOW_MIN_WIDTH_PX, width)
+        min_height = min(WINDOW_MIN_HEIGHT_PX, height)
         x = max(0, (screen_width - width) // 2)
         y = max(0, (screen_height - height) // 2)
-        self.root.minsize(min(WINDOW_MIN_WIDTH_PX, width), min(WINDOW_MIN_HEIGHT_PX, height))
-        self.root.geometry(f'{int(width)}x{int(height)}+{int(x)}+{int(y)}')
+        return f'{int(width)}x{int(height)}+{int(x)}+{int(y)}', int(min_width), int(min_height)
 
     @staticmethod
     def _parse_numeric_field(text: str, label: str) -> float:
