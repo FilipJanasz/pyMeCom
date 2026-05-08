@@ -23,6 +23,12 @@ def make_gui(**values):
         "bath_standby_temp_c": "25.0",
         "pump_safe_on": 1,
         "duration": "",
+        "recipe_step_name": "step_1",
+        "recipe_duration_s": "60",
+        "recipe_bath_temp_c": "",
+        "recipe_tec_voltage_v": "",
+        "recipe_tec_current_a": "",
+        "recipe_tec_power_w": "",
     }
     defaults.update(values)
     for name, value in defaults.items():
@@ -179,3 +185,150 @@ def test_connection_color_supports_separate_detect_indicator_states():
     assert LiveLoggerGui._connection_color("green") == "forest green"
     assert LiveLoggerGui._connection_color("red") == "firebrick"
     assert LiveLoggerGui._connection_color("gray") == "gray50"
+
+
+def test_detect_mode_identifies_huber_only_shared_steps():
+    gui = make_gui()
+
+    mode = gui._detect_mode_from_content({"steps": [{"name": "bath", "bath_setpoint_c": 28, "duration_s": 5}]})
+
+    assert mode == "Huber-only"
+
+
+def test_validate_huber_only_rejects_tec_requests():
+    gui = make_gui()
+
+    error = gui._validate_mode_compatibility(
+        {"steps": [{"name": "both", "bath_setpoint_c": 28, "tec_power_w": 1, "duration_s": 5}]},
+        "Huber-only",
+    )
+
+    assert "cannot run steps with TEC" in error
+
+
+def test_recipe_payload_preserves_huber_only_steps():
+    gui = make_gui()
+    gui.recipe_points = [{"name": "bath", "duration_s": 30.0, "progression_mode": "time", "bath_setpoint_c": 26.5}]
+
+    payload = gui._build_recipe_payload()
+
+    assert payload["run_name"] == "gui_recipe"
+    assert payload["steps"] == gui.recipe_points
+    assert payload["safety"]["bath_standby_setpoint_c"] == 25.0
+
+
+def test_recipe_preview_points_builds_stepwise_tec_and_huber_curves():
+    tec_points, bath_points = LiveLoggerGui._recipe_preview_points(
+        [
+            {"duration_s": 10, "tec_power_w": 1.5},
+            {"duration_s": 5, "bath_setpoint_c": 27.0},
+        ]
+    )
+
+    assert tec_points == [(0.0, 1.5), (10.0, 1.5)]
+    assert bath_points == [(10.0, 27.0), (15.0, 27.0)]
+
+
+def test_parse_numeric_field_raises_friendly_field_label():
+    try:
+        LiveLoggerGui._parse_numeric_field("abc", "TEC power W")
+    except ValueError as exc:
+        assert str(exc) == "TEC power W must be a number"
+    else:
+        raise AssertionError("expected bad numeric input to fail")
+
+
+def test_recipe_step_from_inputs_derives_power_from_voltage_current():
+    gui = make_gui(
+        recipe_step_name="vi",
+        recipe_duration_s="12",
+        recipe_bath_temp_c="28.5",
+        recipe_tec_voltage_v="2.0",
+        recipe_tec_current_a="0.4",
+        recipe_tec_power_w="",
+    )
+    gui.recipe_points = []
+
+    step = gui._recipe_step_from_inputs()
+
+    assert step == {
+        "name": "vi",
+        "duration_s": 12.0,
+        "progression_mode": "time",
+        "bath_setpoint_c": 28.5,
+        "tec_voltage_v": 2.0,
+        "tec_current_a": 0.4,
+        "tec_power_w": 0.8,
+    }
+
+
+def test_recipe_step_from_inputs_requires_voltage_current_pair():
+    gui = make_gui(recipe_tec_voltage_v="2.0", recipe_tec_current_a="")
+    gui.recipe_points = []
+
+    try:
+        gui._recipe_step_from_inputs()
+    except ValueError as exc:
+        assert "voltage and current" in str(exc)
+    else:
+        raise AssertionError("expected partial TEC V/I inputs to fail")
+
+
+class FakeTecSessionManager:
+    def __init__(self, session):
+        self.session = session
+        self.exited = False
+
+    def __enter__(self):
+        return self.session
+
+    def __exit__(self, exc_type, exc, tb):
+        self.exited = True
+
+
+class FakeTecLogger:
+    def __init__(self, session, endpoint="COM7"):
+        self.manager = FakeTecSessionManager(session)
+        self.endpoint = endpoint
+
+    def _open_session(self):
+        return self.manager, self.endpoint
+
+
+class FakeIdentifySession:
+    def __init__(self, result=None, error=None):
+        self.result = result
+        self.error = error
+        self.calls = []
+
+    def identify(self, address):
+        self.calls.append(address)
+        if self.error is not None:
+            raise self.error
+        return self.result
+
+
+def test_probe_tec_controller_keeps_port_when_address_query_fails():
+    session = FakeIdentifySession(error=RuntimeError("timeout"))
+    logger = FakeTecLogger(session)
+
+    endpoint, detected_address, identify_error = LiveLoggerGui._probe_tec_controller(logger, "1")
+
+    assert endpoint == "COM7"
+    assert detected_address is None
+    assert identify_error == "timeout"
+    assert session.calls == [1]
+    assert logger.manager.exited is True
+
+
+def test_probe_tec_controller_reports_address_when_identify_succeeds():
+    session = FakeIdentifySession(result=23)
+    logger = FakeTecLogger(session, endpoint="COM8")
+
+    endpoint, detected_address, identify_error = LiveLoggerGui._probe_tec_controller(logger, "2")
+
+    assert endpoint == "COM8"
+    assert detected_address == 23
+    assert identify_error is None
+    assert session.calls == [2]
+    assert logger.manager.exited is True

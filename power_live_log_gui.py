@@ -120,6 +120,18 @@ class LiveLoggerGui:
         self.show_requested_line = IntVar(value=1)
         self.show_live_line = IntVar(value=1)
         self.enable_second_plot = IntVar(value=0)
+        self.manual_tec_power_w = StringVar(value='0.0')
+        self.manual_tec_voltage_v = StringVar(value='0.0')
+        self.manual_tec_current_a = StringVar(value='0.0')
+        self.manual_huber_temp_c = StringVar(value='25.0')
+        self.manual_pump_on = IntVar(value=1)
+        self.manual_command_status = StringVar(value='Manual commands: idle')
+        self.recipe_step_name = StringVar(value='step_1')
+        self.recipe_duration_s = StringVar(value='60')
+        self.recipe_bath_temp_c = StringVar(value='')
+        self.recipe_tec_voltage_v = StringVar(value='')
+        self.recipe_tec_current_a = StringVar(value='')
+        self.recipe_tec_power_w = StringVar(value='')
 
         self.last_output_csv: Path | None = None
         self.run_thread: threading.Thread | None = None
@@ -130,6 +142,7 @@ class LiveLoggerGui:
         self.loaded_schedule_points: list[tuple[float, float]] = []
         self.loaded_temp_schedule_points: list[tuple[float, float]] = []
         self.loaded_power_schedule = []
+        self.recipe_points: list[dict[str, object]] = []
         self.animating = False
         self.stop_requested = False
         self.unified_engine: DualDeviceRunEngine | None = None
@@ -219,6 +232,7 @@ class LiveLoggerGui:
         Radiobutton(runtime_frame, text='Auto', variable=self.run_mode_selection, value='Auto').grid(row=3, column=1, sticky='w')
         Radiobutton(runtime_frame, text='TEC-only', variable=self.run_mode_selection, value='TEC-only').grid(row=3, column=2, sticky='w')
         Radiobutton(runtime_frame, text='Unified', variable=self.run_mode_selection, value='Unified').grid(row=3, column=3, sticky='w')
+        Radiobutton(runtime_frame, text='Huber-only', variable=self.run_mode_selection, value='Huber-only').grid(row=3, column=4, sticky='w')
         Label(runtime_frame, text='Detected from JSON').grid(row=4, column=0, sticky='w')
         Label(runtime_frame, textvariable=self.detected_mode, font=('TkDefaultFont', 9, 'bold')).grid(row=4, column=1, sticky='w')
         add_row(runtime_frame, 'Channel', self.channel, 5, width=16)
@@ -260,6 +274,26 @@ class LiveLoggerGui:
         Button(buttons, text='Clear Plot', command=self.clear_plot).pack(side=LEFT, padx=(6, 0))
         Button(buttons, text='Use selection for Plot 2', command=self.apply_second_plot_selection).pack(side=LEFT, padx=(6, 0))
         Button(buttons, text='Zero TEC Output', command=self.zero_output).pack(side=LEFT, padx=(6, 0))
+
+        manual_frame = Frame(self.root, padx=8, pady=4, relief='groove', bd=1)
+        manual_frame.pack(fill=BOTH, padx=8, pady=(0, 4))
+        Label(manual_frame, text='Manual Commands', font=('TkDefaultFont', 10, 'bold')).grid(row=0, column=0, columnspan=8, sticky='w')
+        Label(manual_frame, textvariable=self.manual_command_status, justify=LEFT, anchor='w').grid(row=1, column=0, columnspan=8, sticky='we')
+        Label(manual_frame, text='TEC power W').grid(row=2, column=0, sticky='w')
+        Entry(manual_frame, textvariable=self.manual_tec_power_w, width=10).grid(row=2, column=1, sticky='w')
+        Button(manual_frame, text='Set TEC Power', command=self.manual_set_tec_power).grid(row=2, column=2, sticky='w')
+        Label(manual_frame, text='TEC V / A').grid(row=2, column=3, sticky='w')
+        Entry(manual_frame, textvariable=self.manual_tec_voltage_v, width=8).grid(row=2, column=4, sticky='w')
+        Entry(manual_frame, textvariable=self.manual_tec_current_a, width=8).grid(row=2, column=5, sticky='w')
+        Button(manual_frame, text='Set TEC V/I', command=self.manual_set_tec_voltage_current).grid(row=2, column=6, sticky='w')
+        Button(manual_frame, text='Zero TEC', command=self.zero_output).grid(row=2, column=7, sticky='w')
+        Label(manual_frame, text='Huber °C').grid(row=3, column=0, sticky='w')
+        Entry(manual_frame, textvariable=self.manual_huber_temp_c, width=10).grid(row=3, column=1, sticky='w')
+        Button(manual_frame, text='Set Huber Temp', command=self.manual_set_huber_temperature).grid(row=3, column=2, sticky='w')
+        Checkbutton(manual_frame, text='Pump ON', variable=self.manual_pump_on).grid(row=3, column=3, sticky='w')
+        Button(manual_frame, text='Apply Pump', command=self.manual_set_huber_pump).grid(row=3, column=4, sticky='w')
+        Button(manual_frame, text='Read Huber', command=self.manual_read_huber).grid(row=3, column=5, sticky='w')
+        manual_frame.grid_columnconfigure(7, weight=1)
 
         mid = Frame(self.root, padx=8, pady=4)
         mid.pack(fill=BOTH, expand=True)
@@ -307,8 +341,283 @@ class LiveLoggerGui:
             self.canvas.draw_idle()
             self.request_canvas.draw_idle()
         Checkbutton(io_frame, text='Show requested input line', variable=self.show_requested_line, command=self._redraw_requested_input_plot).grid(row=10, column=0, columnspan=2, sticky='w')
+        recipe_frame = Frame(io_frame, padx=4, pady=4, relief='groove', bd=1)
+        recipe_frame.grid(row=11, column=0, columnspan=5, sticky='nsew', pady=(8, 0))
+        Label(recipe_frame, text='Recipe Builder (click preview points or edit table rows)', font=('TkDefaultFont', 9, 'bold')).grid(row=0, column=0, columnspan=7, sticky='w')
+        Label(recipe_frame, text='Name').grid(row=1, column=0, sticky='w')
+        Entry(recipe_frame, textvariable=self.recipe_step_name, width=12).grid(row=1, column=1, sticky='w')
+        Label(recipe_frame, text='Duration s').grid(row=1, column=2, sticky='w')
+        Entry(recipe_frame, textvariable=self.recipe_duration_s, width=8).grid(row=1, column=3, sticky='w')
+        Label(recipe_frame, text='Bath °C').grid(row=2, column=0, sticky='w')
+        Entry(recipe_frame, textvariable=self.recipe_bath_temp_c, width=8).grid(row=2, column=1, sticky='w')
+        Label(recipe_frame, text='TEC V/A/W').grid(row=2, column=2, sticky='w')
+        Entry(recipe_frame, textvariable=self.recipe_tec_voltage_v, width=7).grid(row=2, column=3, sticky='w')
+        Entry(recipe_frame, textvariable=self.recipe_tec_current_a, width=7).grid(row=2, column=4, sticky='w')
+        Entry(recipe_frame, textvariable=self.recipe_tec_power_w, width=8).grid(row=2, column=5, sticky='w')
+        Button(recipe_frame, text='Add/Update Step', command=self.recipe_add_or_update_step).grid(row=3, column=0, columnspan=2, sticky='w')
+        Button(recipe_frame, text='Delete Step', command=self.recipe_delete_selected_step).grid(row=3, column=2, sticky='w')
+        Button(recipe_frame, text='Save Recipe JSON', command=self.save_recipe_config).grid(row=3, column=3, columnspan=2, sticky='w')
+        self.recipe_list = Listbox(recipe_frame, height=5, width=72, exportselection=False)
+        self.recipe_list.grid(row=4, column=0, columnspan=7, sticky='we', pady=(4, 0))
+        self.recipe_list.bind('<<ListboxSelect>>', self._recipe_selection_changed)
+        self.recipe_plot_frame = Frame(recipe_frame)
+        self.recipe_plot_frame.grid(row=5, column=0, columnspan=7, sticky='nsew', pady=(4, 0))
+        self.recipe_figure = None
+        self.recipe_axes = None
+        self.recipe_canvas = None
+        if Figure is not None:
+            self.recipe_figure = Figure(figsize=(5.5, 2.8), dpi=100)
+            self.recipe_axes = self.recipe_figure.subplots(2, 1, sharex=True)
+            self.recipe_canvas = FigureCanvasTkAgg(self.recipe_figure, master=self.recipe_plot_frame)
+            self.recipe_canvas.get_tk_widget().pack(fill=BOTH, expand=True)
+            self.recipe_canvas.mpl_connect('button_press_event', self._recipe_plot_clicked)
+            self._redraw_recipe_plot()
+        recipe_frame.grid_columnconfigure(6, weight=1)
         Checkbutton(right_col, text='Show live line (default on)', variable=self.show_live_line, command=self._redraw_plot).pack(anchor='w')
         Checkbutton(right_col, text='Enable second live plot (defaults to diff voltage 1/2)', variable=self.enable_second_plot, command=self._redraw_plot).pack(anchor='w')
+
+    @staticmethod
+    def _parse_numeric_field(text: str, label: str) -> float:
+        try:
+            return float(str(text).strip())
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f'{label} must be a number') from exc
+
+    def _run_manual_command(self, label: str, action) -> None:
+        try:
+            result = action()
+            suffix = f': {result}' if result is not None else ''
+            self.manual_command_status.set(f'Manual commands: {label} complete{suffix}')
+        except Exception as exc:
+            self.manual_command_status.set(f'Manual commands: {label} failed ({exc})')
+            messagebox.showerror(f'{label} failed', str(exc))
+
+    def manual_set_tec_power(self) -> None:
+        def action():
+            power_w = self._parse_numeric_field(self.manual_tec_power_w.get(), 'TEC power W')
+            adapter = TecPowerAdapter(self._build_config())
+            try:
+                adapter.connect()
+                adapter.set_power(power_w)
+            finally:
+                adapter.close()
+            self._set_tec_connection_status('green', f'TEC: manual power set to {power_w:g} W')
+
+        self._run_manual_command('Set TEC power', action)
+
+    def manual_set_tec_voltage_current(self) -> None:
+        def action():
+            voltage_v = self._parse_numeric_field(self.manual_tec_voltage_v.get(), 'TEC voltage V')
+            current_a = self._parse_numeric_field(self.manual_tec_current_a.get(), 'TEC current A')
+            adapter = TecPowerAdapter(self._build_config())
+            try:
+                adapter.connect()
+                adapter.set_voltage_current(voltage_v, current_a)
+            finally:
+                adapter.close()
+            self._set_tec_connection_status('green', f'TEC: manual V/I set to {voltage_v:g} V, {current_a:g} A')
+
+        self._run_manual_command('Set TEC V/I', action)
+
+    def _with_huber_adapter(self, action):
+        adapter = HuberWorkflowAdapter(port=self.huber_port.get().strip() or None)
+        try:
+            if not adapter.connect():
+                raise RuntimeError('Huber connect() returned False')
+            return action(adapter)
+        finally:
+            adapter.close()
+
+    def manual_set_huber_temperature(self) -> None:
+        def action():
+            temp_c = self._parse_numeric_field(self.manual_huber_temp_c.get(), 'Huber temperature °C')
+            ok = self._with_huber_adapter(lambda adapter: adapter.set_setpoint(temp_c))
+            if not ok:
+                raise RuntimeError('Huber setpoint command returned False')
+            self._set_huber_connection_status('green', f'Huber: manual setpoint {temp_c:g} °C')
+
+        self._run_manual_command('Set Huber temp', action)
+
+    def manual_set_huber_pump(self) -> None:
+        pump_on = bool(self.manual_pump_on.get())
+
+        def action():
+            ok = self._with_huber_adapter(lambda adapter: adapter.set_pump_state(pump_on))
+            if not ok:
+                raise RuntimeError('Huber pump command returned False or is unsupported')
+            self._set_huber_connection_status('green', f'Huber: manual pump {"ON" if pump_on else "OFF"}')
+
+        self._run_manual_command('Set Huber pump', action)
+
+    def manual_read_huber(self) -> None:
+        def action():
+            bath_temp, setpoint = self._with_huber_adapter(lambda adapter: (adapter.read_bath_temp(), adapter.read_setpoint()))
+            self._set_huber_connection_status('green', f'Huber: bath {bath_temp} °C, setpoint {setpoint} °C')
+            return f'bath={bath_temp} °C, setpoint={setpoint} °C'
+
+        self._run_manual_command('Read Huber', action)
+
+    def _recipe_step_from_inputs(self) -> dict[str, object]:
+        duration_s = self._parse_numeric_field(self.recipe_duration_s.get(), 'Recipe duration seconds')
+        step: dict[str, object] = {
+            'name': self.recipe_step_name.get().strip() or f'step_{len(self.recipe_points) + 1}',
+            'duration_s': duration_s,
+            'progression_mode': 'time',
+        }
+        if duration_s <= 0:
+            raise ValueError('Recipe duration must be > 0')
+        bath_text = self.recipe_bath_temp_c.get().strip()
+        voltage_text = self.recipe_tec_voltage_v.get().strip()
+        current_text = self.recipe_tec_current_a.get().strip()
+        power_text = self.recipe_tec_power_w.get().strip()
+        if bath_text:
+            step['bath_setpoint_c'] = self._parse_numeric_field(bath_text, 'Recipe bath temperature °C')
+        if voltage_text or current_text:
+            if not voltage_text or not current_text:
+                raise ValueError('Recipe TEC voltage and current must both be filled, or both blank')
+            voltage_v = self._parse_numeric_field(voltage_text, 'Recipe TEC voltage V')
+            current_a = self._parse_numeric_field(current_text, 'Recipe TEC current A')
+            step['tec_voltage_v'] = voltage_v
+            step['tec_current_a'] = current_a
+            step['tec_power_w'] = self._parse_numeric_field(power_text, 'Recipe TEC power W') if power_text else voltage_v * current_a
+        elif power_text:
+            step['tec_power_w'] = self._parse_numeric_field(power_text, 'Recipe TEC power W')
+        if 'bath_setpoint_c' not in step and 'tec_power_w' not in step:
+            raise ValueError('Recipe step must include a bath setpoint or TEC setpoint')
+        return step
+
+    def recipe_add_or_update_step(self) -> None:
+        try:
+            step = self._recipe_step_from_inputs()
+        except ValueError as exc:
+            messagebox.showerror('Invalid recipe step', str(exc))
+            return
+        selection = list(self.recipe_list.curselection()) if hasattr(self, 'recipe_list') else []
+        if selection:
+            self.recipe_points[selection[0]] = step
+        else:
+            self.recipe_points.append(step)
+            self.recipe_step_name.set(f'step_{len(self.recipe_points) + 1}')
+        self._refresh_recipe_table()
+        self._redraw_recipe_plot()
+
+    def recipe_delete_selected_step(self) -> None:
+        selection = list(self.recipe_list.curselection()) if hasattr(self, 'recipe_list') else []
+        if not selection:
+            return
+        del self.recipe_points[selection[0]]
+        self._refresh_recipe_table()
+        self._redraw_recipe_plot()
+
+    def _recipe_selection_changed(self, _event=None) -> None:
+        selection = list(self.recipe_list.curselection()) if hasattr(self, 'recipe_list') else []
+        if not selection:
+            return
+        step = self.recipe_points[selection[0]]
+        self.recipe_step_name.set(str(step.get('name', '')))
+        self.recipe_duration_s.set(str(step.get('duration_s', '')))
+        self.recipe_bath_temp_c.set('' if step.get('bath_setpoint_c') is None else str(step.get('bath_setpoint_c')))
+        self.recipe_tec_voltage_v.set('' if step.get('tec_voltage_v') is None else str(step.get('tec_voltage_v')))
+        self.recipe_tec_current_a.set('' if step.get('tec_current_a') is None else str(step.get('tec_current_a')))
+        self.recipe_tec_power_w.set('' if step.get('tec_power_w') is None else str(step.get('tec_power_w')))
+
+    def _refresh_recipe_table(self) -> None:
+        if not hasattr(self, 'recipe_list'):
+            return
+        self.recipe_list.delete(0, END)
+        elapsed = 0.0
+        for idx, step in enumerate(self.recipe_points, start=1):
+            duration = float(step.get('duration_s', 0.0) or 0.0)
+            bath = step.get('bath_setpoint_c', '')
+            power = step.get('tec_power_w', '')
+            voltage = step.get('tec_voltage_v', '')
+            current = step.get('tec_current_a', '')
+            self.recipe_list.insert(
+                END,
+                f'{idx:02d} t={elapsed:g}s dur={duration:g}s name={step.get("name", "")} bath={bath}C tec={power}W ({voltage}V/{current}A)',
+            )
+            elapsed += duration
+
+    def _redraw_recipe_plot(self) -> None:
+        if getattr(self, 'recipe_axes', None) is None or getattr(self, 'recipe_canvas', None) is None:
+            return
+        tec_axis, huber_axis = self.recipe_axes
+        tec_axis.clear()
+        huber_axis.clear()
+        tec_axis.set_title('Recipe preview')
+        tec_axis.set_ylabel('TEC W')
+        huber_axis.set_ylabel('Bath °C')
+        huber_axis.set_xlabel('Seconds')
+        tec_points, bath_points = self._recipe_preview_points(self.recipe_points)
+        if tec_points:
+            tec_axis.plot([x for x, _ in tec_points], [y for _, y in tec_points], marker='o', color='tab:orange')
+        else:
+            tec_axis.text(0.5, 0.5, 'No TEC recipe points', transform=tec_axis.transAxes, ha='center', va='center')
+        if bath_points:
+            huber_axis.plot([x for x, _ in bath_points], [y for _, y in bath_points], marker='o', color='tab:blue')
+        else:
+            huber_axis.text(0.5, 0.5, 'No Huber recipe points', transform=huber_axis.transAxes, ha='center', va='center')
+        tec_axis.grid(True, which='major', linestyle='--', alpha=0.6)
+        huber_axis.grid(True, which='major', linestyle='--', alpha=0.6)
+        self.recipe_figure.tight_layout()
+        self.recipe_canvas.draw_idle()
+
+    @staticmethod
+    def _recipe_preview_points(steps: list[dict[str, object]]) -> tuple[list[tuple[float, float]], list[tuple[float, float]]]:
+        tec_points: list[tuple[float, float]] = []
+        bath_points: list[tuple[float, float]] = []
+        elapsed = 0.0
+        for step in steps:
+            duration = float(step.get('duration_s', 0.0) or 0.0)
+            power = step.get('tec_power_w')
+            bath = step.get('bath_setpoint_c')
+            if power is not None:
+                y = float(power)
+                tec_points.extend([(elapsed, y), (elapsed + duration, y)])
+            if bath is not None:
+                y = float(bath)
+                bath_points.extend([(elapsed, y), (elapsed + duration, y)])
+            elapsed += duration
+        return tec_points, bath_points
+
+    def _recipe_plot_clicked(self, event) -> None:
+        if event.xdata is None or event.ydata is None or getattr(self, 'recipe_axes', None) is None:
+            return
+        duration = max(float(event.xdata), 1.0)
+        self.recipe_duration_s.set(f'{duration:g}')
+        if event.inaxes == self.recipe_axes[0]:
+            self.recipe_tec_power_w.set(f'{float(event.ydata):g}')
+        elif event.inaxes == self.recipe_axes[1]:
+            self.recipe_bath_temp_c.set(f'{float(event.ydata):g}')
+
+    def _build_recipe_payload(self) -> dict[str, object]:
+        if not self.recipe_points:
+            raise ValueError('Add at least one recipe step before saving')
+        return {
+            'run_name': 'gui_recipe',
+            'steps': list(self.recipe_points),
+            'safety': {
+                'tec_power_w_on_stop': 0.0,
+                'bath_standby_setpoint_c': float(self.bath_standby_temp_c.get()),
+                'pump_on_in_safe_state': bool(self.pump_safe_on.get()),
+            },
+        }
+
+    def save_recipe_config(self) -> None:
+        path_text = self.config_path.get().strip() or filedialog.asksaveasfilename(defaultextension='.json', filetypes=[('JSON files', '*.json')])
+        if not path_text:
+            return
+        try:
+            payload = self._build_recipe_payload()
+        except ValueError as exc:
+            messagebox.showerror('Invalid recipe', str(exc))
+            return
+        self.config_path.set(path_text)
+        with open(path_text, 'w', encoding='utf-8') as handle:
+            json.dump(payload, handle, indent=2)
+            handle.write('\n')
+        self._load_requested_input_from_config(path_text)
+        self._remember_last_config_path(path_text)
 
     def browse_config(self) -> None:
         selected = filedialog.askopenfilename(filetypes=[('JSON files', '*.json'), ('All files', '*.*')])
@@ -354,7 +663,7 @@ class LiveLoggerGui:
         self.detected_mode.set(detected_mode)
         self.run_mode.set(detected_mode)
         try:
-            if detected_mode == "Unified":
+            if detected_mode in {"Unified", "Huber-only"}:
                 rcfg = RunConfig.from_dict(content)
                 self.duration.set(str(sum(step.duration_s for step in rcfg.steps)))
                 self.bath_standby_temp_c.set(str(rcfg.safety.bath_standby_setpoint_c))
@@ -378,6 +687,16 @@ class LiveLoggerGui:
 
     def _detect_mode_from_content(self, content: dict) -> str:
         if looks_like_unified_run_config(content):
+            try:
+                steps = RunConfig.from_dict(content).steps
+            except Exception:
+                return "Unified"
+            has_tec = any(step.tec_power_w is not None or step.tec_voltage_v is not None or step.tec_current_a is not None for step in steps)
+            has_huber = any(step.bath_setpoint_c is not None for step in steps)
+            if has_huber and not has_tec:
+                return "Huber-only"
+            if has_tec and not has_huber:
+                return "TEC-only"
             return "Unified"
         return "TEC-only"
 
@@ -406,14 +725,22 @@ class LiveLoggerGui:
             self.live_data.setdefault(column, deque(maxlen=MAX_POINTS))
 
     def _validate_mode_compatibility(self, content: dict, requested_mode: str) -> str | None:
-        if requested_mode == "Unified":
+        if requested_mode in {"Unified", "Huber-only"}:
             has_shared_or_legacy_shape = (
                 looks_like_unified_run_config(content)
-                or isinstance(content.get("power_schedule"), list)
-                or bool(legacy_tec_steps_to_power_schedule(content))
+                or (requested_mode == "Unified" and isinstance(content.get("power_schedule"), list))
+                or (requested_mode == "Unified" and bool(legacy_tec_steps_to_power_schedule(content)))
             )
             if not has_shared_or_legacy_shape:
-                return "Unified mode requires shared steps or legacy TEC power_schedule entries."
+                return f"{requested_mode} mode requires shared steps with bath_setpoint_c entries."
+            if requested_mode == "Huber-only":
+                run_cfg = RunConfig.from_dict(content)
+                has_huber = any(step.bath_setpoint_c is not None for step in run_cfg.steps)
+                has_tec = any(step.tec_power_w is not None or step.tec_voltage_v is not None or step.tec_current_a is not None for step in run_cfg.steps)
+                if not has_huber:
+                    return "Huber-only mode requires at least one bath_setpoint_c step."
+                if has_tec:
+                    return "Huber-only mode cannot run steps with TEC power, voltage, or current requests. Choose Unified instead."
             return None
         if requested_mode == "TEC-only":
             has_tec_shape = (
@@ -642,8 +969,8 @@ class LiveLoggerGui:
             messagebox.showerror('Invalid Hz', f'Acquisition rate must be greater than or equal to {MIN_HZ:g} Hz for TEC polling.')
             return
         path_text = self.config_path.get().strip()
-        if self.run_mode_selection.get() == 'Unified' and not path_text:
-            messagebox.showerror('Unified mode requires JSON', 'Select a unified JSON config file before starting Unified mode.')
+        if self.run_mode_selection.get() in {'Unified', 'Huber-only'} and not path_text:
+            messagebox.showerror('Shared JSON required', 'Select a shared JSON config file before starting Unified or Huber-only mode.')
             return
         if path_text:
             try:
@@ -658,8 +985,8 @@ class LiveLoggerGui:
                 messagebox.showerror('Run mode mismatch', mode_error)
                 return
             self.run_mode.set(effective_mode)
-            if effective_mode == "Unified":
-                self._start_unified_run(path_text, hz)
+            if effective_mode in {"Unified", "Huber-only"}:
+                self._start_unified_run(path_text, hz, display_mode=effective_mode)
                 return
         cfg = self._build_config()
         self._set_controller_status('yellow', 'Controller status: connecting (starting logger)')
@@ -730,8 +1057,8 @@ class LiveLoggerGui:
         self.run_thread = threading.Thread(target=worker, daemon=True)
         self.run_thread.start()
 
-    def _start_unified_run(self, path_text: str, hz: float) -> None:
-        self.run_mode.set('Unified')
+    def _start_unified_run(self, path_text: str, hz: float, display_mode: str = 'Unified') -> None:
+        self.run_mode.set(display_mode)
         self.stop_requested = False
         try:
             run_cfg = RunConfig.from_json_file(path_text)
@@ -797,23 +1124,23 @@ class LiveLoggerGui:
 
         def worker() -> None:
             try:
-                self.root.after(0, lambda: self._set_controller_status('yellow', 'Controller status: connecting (unified run)'))
+                self.root.after(0, lambda: self._set_controller_status('yellow', f'Controller status: connecting ({display_mode} run)'))
                 paths = engine.run(run_cfg, legacy_power_policy=LegacyPowerPolicy.ALLOW_ZERO_POWER.value, event_callback=on_event, row_callback=on_row)
                 if getattr(engine.state, 'value', str(engine.state)) == 'ERROR':
-                    self.root.after(0, lambda p=paths.csv_path.name: self._set_controller_status('red', f'Controller status: unified run ended in ERROR ({p})'))
+                    self.root.after(0, lambda p=paths.csv_path.name: self._set_controller_status('red', f'Controller status: {display_mode} run ended in ERROR ({p})'))
                 else:
-                    self.root.after(0, lambda p=paths.csv_path.name: self._set_controller_status('green', f'Controller status: unified run complete ({p})'))
+                    self.root.after(0, lambda p=paths.csv_path.name: self._set_controller_status('green', f'Controller status: {display_mode} run complete ({p})'))
                     if has_any_tec_request:
                         self.root.after(0, lambda: self._set_tec_connection_status('green', 'TEC: connected (unified run complete)'))
                     if has_any_huber_request:
                         self.root.after(0, lambda: self._set_huber_connection_status('green', 'Huber: connected (unified run complete)'))
             except Exception as exc:
-                self.root.after(0, lambda e=exc: self._set_controller_status('red', f'Controller status: unified run failed ({e})'))
+                self.root.after(0, lambda e=exc: self._set_controller_status('red', f'Controller status: {display_mode} run failed ({e})'))
                 if has_any_tec_request:
                     self.root.after(0, lambda e=exc: self._set_tec_connection_status('red', f'TEC: failed ({e})'))
                 if has_any_huber_request:
                     self.root.after(0, lambda e=exc: self._set_huber_connection_status('red', f'Huber: failed ({e})'))
-                self.root.after(0, lambda e=exc: messagebox.showerror('Unified run failed', str(e)))
+                self.root.after(0, lambda e=exc: messagebox.showerror(f'{display_mode} run failed', str(e)))
             finally:
                 self.animating = False
                 self.unified_engine = None
@@ -1029,21 +1356,44 @@ class LiveLoggerGui:
             f'{choices}',
         )
 
+    @staticmethod
+    def _probe_tec_controller(logger: LiveLogger, address_text: str) -> tuple[str | None, object | None, str | None]:
+        """Open the TEC serial session and optionally query the controller address.
+
+        The standalone TEC-only GUI treats a successful MeCom serial open as a
+        successful detection.  Keep that behavior here so a device is still
+        recognized when the optional address query is blocked by an unexpected
+        address, firmware response, or transient timeout.
+        """
+        session_manager, endpoint = logger._open_session()
+        detected_address = None
+        identify_error = None
+        with session_manager as session:
+            try:
+                address = int(str(address_text).strip())
+                detected_address = session.identify(address=address)
+            except Exception as exc:
+                identify_error = str(exc)
+        return endpoint, detected_address, identify_error
+
     def detect_controller(self) -> None:
         try:
             self._set_controller_status('yellow', 'Controller status: connecting (detecting TEC)')
             self._set_tec_connection_status('yellow', 'TEC: detecting connection')
-            logger = LiveLogger(self._build_config())
-            session_manager, endpoint = logger._open_session()
+            endpoint, detected_address, identify_error = self._probe_tec_controller(LiveLogger(self._build_config()), self.address.get())
             if endpoint:
                 self.serial_port.set(str(endpoint))
-                # After a successful detection, keep using the explicit port so
+                # After a successful port probe, keep using the explicit port so
                 # future starts do not depend on fragile autodetection ordering.
                 self.serial_autodetect.set(0)
-            with session_manager as session:
-                detected_address = session.identify(address=int(self.address.get()))
-            self._set_controller_status('green', f'Controller status: connected ({endpoint}, address {detected_address})')
-            self._set_tec_connection_status('green', f'TEC: detected and connection verified ({endpoint}, address {detected_address})')
+            if detected_address is not None:
+                detail = f'{endpoint}, address {detected_address}'
+                self._set_controller_status('green', f'Controller status: connected ({detail})')
+                self._set_tec_connection_status('green', f'TEC: detected and connection verified ({detail})')
+            else:
+                warning = f'; address query skipped/failed ({identify_error})' if identify_error else ''
+                self._set_controller_status('green', f'Controller status: connected ({endpoint}{warning})')
+                self._set_tec_connection_status('green', f'TEC: port detected ({endpoint}); address not verified{warning}')
         except Exception as exc:
             self._set_controller_status('red', f'Controller status: not detected ({exc})')
             self._set_tec_connection_status('red', f'TEC: not detected or connected ({exc})')
