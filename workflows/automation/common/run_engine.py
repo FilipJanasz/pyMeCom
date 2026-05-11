@@ -132,6 +132,8 @@ class DualDeviceRunEngine:
                 "tec_power_w",
                 "tec_voltage_v",
                 "tec_current_a",
+                "tec_hr_1_differential_voltage_v",
+                "tec_hr_2_differential_voltage_v",
                 "bath_temp_c",
                 "bath_current_setpoint_c",
                 "tec_actual_power_w",
@@ -215,12 +217,20 @@ class DualDeviceRunEngine:
                 "tec_power_w": step.tec_power_w,
                 "tec_voltage_v": step.tec_voltage_v,
                 "tec_current_a": step.tec_current_a,
+                "tec_hr_1_differential_voltage_v": self._read_tec_differential_voltage(1),
+                "tec_hr_2_differential_voltage_v": self._read_tec_differential_voltage(2),
                 "bath_temp_c": self.bath_adapter.read_bath_temp(),
                 "bath_current_setpoint_c": self.bath_adapter.read_setpoint(),
                 "tec_actual_power_w": self.tec_adapter.read_actual_power(),
             }
         )
         return row
+
+    def _read_tec_differential_voltage(self, instance: int) -> Any:
+        reader = getattr(self.tec_adapter, "read_differential_voltage", None)
+        if not callable(reader):
+            return None
+        return reader(instance)
 
     def _run_safety_cleanup(self, run_config: RunConfig, metadata: Dict[str, Any], emit: Callable[..., None]) -> None:
         emit("safety_cleanup_start")

@@ -1,3 +1,4 @@
+import csv
 import json
 from pathlib import Path
 
@@ -35,6 +36,9 @@ class FakeTecAdapter:
 
     def read_actual_power(self):
         return self.power
+
+    def read_differential_voltage(self, instance):
+        return {1: 0.125, 2: 0.250}[instance]
 
     def safe_output(self, power_w):
         self.power = power_w
@@ -87,6 +91,20 @@ def test_normal_progression(tmp_path: Path):
     assert paths.csv_path.exists()
     metadata = json.loads(paths.metadata_path.read_text())
     assert metadata["engine_state"] == "COMPLETED"
+
+
+def test_unified_timeline_logs_hr_differential_voltages(tmp_path: Path):
+    cfg = RunConfig.from_dict({"steps": [{"name": "s1", "bath_setpoint_c": 22, "tec_voltage_v": 1.0, "tec_current_a": 0.5, "duration_s": 0.05}]})
+    engine = DualDeviceRunEngine(FakeTecAdapter(), FakeBathAdapter(), tmp_path, sample_hz=30)
+
+    paths = engine.run(cfg)
+
+    with open(paths.csv_path, newline="", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+
+    assert rows
+    assert rows[0]["tec_hr_1_differential_voltage_v"] == "0.125"
+    assert rows[0]["tec_hr_2_differential_voltage_v"] == "0.25"
 
 
 def test_huber_setpoint_starts_process(tmp_path: Path):

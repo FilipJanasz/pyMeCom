@@ -74,14 +74,35 @@ class LiveParameterSpec:
         return cls(**data)
 
 
+HR_DIFFERENTIAL_VOLTAGE_PARAMETER_ID = 1046
+HR_DIFFERENTIAL_VOLTAGE_PARAMETER_FORMAT = "FLOAT32"
+HR_DIFFERENTIAL_VOLTAGE_INSTANCES = (1, 2)
+
+
+def hr_differential_voltage_spec(instance: int) -> LiveParameterSpec:
+    """Return the TEC HR input differential-voltage spec for one manual channel.
+
+    The TEC programming manual lists Differential Voltage as parameter 1046;
+    MeCom parameter instances 1 and 2 correspond to HR_1 and HR_2 for the
+    existing TEC1161 live-logger configuration.
+    """
+    return LiveParameterSpec(
+        f"diff_voltage_{instance}",
+        f"1046.{instance}: Differential Voltage",
+        parameter_id=HR_DIFFERENTIAL_VOLTAGE_PARAMETER_ID,
+        parameter_format=HR_DIFFERENTIAL_VOLTAGE_PARAMETER_FORMAT,
+        instance=instance,
+    )
+
+
 def default_live_parameters(channel: int = 1) -> List[LiveParameterSpec]:
     return [
         LiveParameterSpec(f"ch{channel}_act_i", f"1020.{channel}: CH{channel} Act I", parameter_id=1020, parameter_format="FLOAT32", instance=channel),
         LiveParameterSpec(f"ch{channel}_act_u", f"1021.{channel}: CH{channel} Act U", parameter_id=1021, parameter_format="FLOAT32", instance=channel),
         LiveParameterSpec(f"ch{channel}_act_p", f"1022.{channel}: CH{channel} Act P", parameter_name="Actual Output Power", instance=channel),
         LiveParameterSpec("lr1_temp", "1044.1: LR1 Temp", parameter_id=1044, parameter_format="FLOAT32", instance=1),
-        LiveParameterSpec("diff_voltage_1", "1046.1: Differential Voltage", parameter_id=1046, parameter_format="FLOAT32", instance=1),
-        LiveParameterSpec("diff_voltage_2", "1046.2: Differential Voltage", parameter_id=1046, parameter_format="FLOAT32", instance=2),
+        hr_differential_voltage_spec(1),
+        hr_differential_voltage_spec(2),
     ]
 
 

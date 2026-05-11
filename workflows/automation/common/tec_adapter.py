@@ -1,10 +1,20 @@
 from __future__ import annotations
 
+import logging
+import math
 from dataclasses import dataclass
 from typing import Any, Optional
 
 from mecom.calibration import CalibrationStep, SafeChannelController
-from .live_logger import LiveLoggerConfig, LiveLogger
+from .live_logger import (
+    HR_DIFFERENTIAL_VOLTAGE_INSTANCES,
+    HR_DIFFERENTIAL_VOLTAGE_PARAMETER_FORMAT,
+    HR_DIFFERENTIAL_VOLTAGE_PARAMETER_ID,
+    LiveLogger,
+    LiveLoggerConfig,
+)
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass
@@ -18,6 +28,7 @@ class TecPowerAdapter:
         self._session = None
         self._controller: Optional[SafeChannelController] = None
         self._logger = LiveLogger(self.config)
+        self._read_failure_keys: set[str] = set()
 
     def connect(self) -> bool:
         self._session_manager, _ = self._logger._open_session()
@@ -75,6 +86,30 @@ class TecPowerAdapter:
         if self._session is None:
             return None
         return self._session.get_parameter(parameter_name="Actual Output Power", address=self.config.address, parameter_instance=self.config.channel)
+
+    def read_differential_voltage(self, instance: int) -> Any:
+        if self._session is None:
+            return None
+        instance = int(instance)
+        if instance not in HR_DIFFERENTIAL_VOLTAGE_INSTANCES:
+            raise ValueError(f"Unsupported TEC HR differential-voltage instance: {instance}")
+        try:
+            return self._session.get_parameter_raw(
+                parameter_id=HR_DIFFERENTIAL_VOLTAGE_PARAMETER_ID,
+                parameter_format=HR_DIFFERENTIAL_VOLTAGE_PARAMETER_FORMAT,
+                address=self.config.address,
+                parameter_instance=instance,
+            )
+        except Exception as exc:
+            key = f"diff_voltage_{instance}"
+            if key not in self._read_failure_keys:
+                LOGGER.warning(
+                    "Read failed for TEC HR input differential voltage %s. Value will be logged as NaN. Error: %r",
+                    instance,
+                    exc,
+                )
+                self._read_failure_keys.add(key)
+            return math.nan
 
     def safe_output(self, power_w: float = 0.0) -> None:
         # Hardware-safe shutdown uses the known-working voltage/current path.

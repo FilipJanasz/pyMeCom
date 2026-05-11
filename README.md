@@ -219,7 +219,7 @@ After each test run, inspect generated files:
 - `run_timeline_*.metadata.json`
 
 Expected:
-- Unified timeline rows contain both TEC and bath columns when unified mode is active.
+- Unified timeline rows contain both TEC and bath columns when unified mode is active, including TEC HR input differential-voltage samples as `tec_hr_1_differential_voltage_v` and `tec_hr_2_differential_voltage_v` when the TEC adapter is connected. These use the same TEC programming-manual channels already used by the TEC-only logger examples: Differential Voltage parameter `1046` with instances `1` (HR_1) and `2` (HR_2).
 - Metadata records safety config, events, and final engine state.
 
 ### 6) Minimal smoke automation (recommended)

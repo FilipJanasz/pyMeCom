@@ -131,12 +131,12 @@ def test_configure_live_plot_columns_selects_defaults_and_initializes_buffers():
     gui.selected_cols = []
     gui.live_data = {}
 
-    gui._configure_live_plot_columns(["bath_temp_c", "tec_actual_power_w", "ignored"], ["tec_actual_power_w", "missing"])
+    gui._configure_live_plot_columns(["bath_temp_c", "tec_actual_power_w", "tec_hr_1_differential_voltage_v", "tec_hr_2_differential_voltage_v", "ignored"], ["tec_actual_power_w", "missing"])
 
-    assert gui.columns_list.items == ["bath_temp_c", "tec_actual_power_w", "ignored"]
+    assert gui.columns_list.items == ["bath_temp_c", "tec_actual_power_w", "tec_hr_1_differential_voltage_v", "tec_hr_2_differential_voltage_v", "ignored"]
     assert gui.selected_cols == ["tec_actual_power_w"]
     assert gui.columns_list.selected == [1]
-    assert set(gui.live_data) == {"bath_temp_c", "tec_actual_power_w", "ignored"}
+    assert set(gui.live_data) == {"bath_temp_c", "tec_actual_power_w", "tec_hr_1_differential_voltage_v", "tec_hr_2_differential_voltage_v", "ignored"}
 
 
 class FakePortInfo:
