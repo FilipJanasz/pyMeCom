@@ -470,6 +470,7 @@ class LiveLoggerGui:
             buttons=[
                 ('Add/Update Step', self.recipe_add_or_update_step),
                 ('Delete Step', self.recipe_delete_selected_step),
+                ('Load Existing JSON', self.load_recipe_config),
                 ('Save Recipe JSON', self.save_recipe_config),
             ],
         )
@@ -901,6 +902,66 @@ class LiveLoggerGui:
             self.recipe_tec_power_w.set(f'{float(event.ydata):g}')
         elif event.inaxes == self.recipe_axes[1]:
             self.recipe_bath_temp_c.set(f'{float(event.ydata):g}')
+
+    @staticmethod
+    def _recipe_step_dict_from_run_step(step) -> dict[str, object]:
+        recipe_step: dict[str, object] = {
+            'name': step.name,
+            'duration_s': step.duration_s,
+            'progression_mode': step.progression_mode,
+        }
+        optional_fields = (
+            'bath_setpoint_c',
+            'tec_voltage_v',
+            'tec_current_a',
+            'tec_power_w',
+            'stability_band_c',
+            'stability_hold_s',
+            'stability_timeout_s',
+        )
+        for field_name in optional_fields:
+            value = getattr(step, field_name)
+            if value is not None:
+                recipe_step[field_name] = value
+        return recipe_step
+
+    @classmethod
+    def _recipe_points_from_config_content(cls, content: dict) -> tuple[list[dict[str, object]], float, bool]:
+        run_cfg = RunConfig.from_dict(content)
+        recipe_points = [cls._recipe_step_dict_from_run_step(step) for step in run_cfg.steps]
+        return recipe_points, run_cfg.safety.bath_standby_setpoint_c, run_cfg.safety.pump_on_in_safe_state
+
+    def _apply_recipe_points_from_config(self, content: dict) -> None:
+        recipe_points, standby_temp_c, pump_safe_on = self._recipe_points_from_config_content(content)
+        self.recipe_points = recipe_points
+        self.bath_standby_temp_c.set(str(standby_temp_c))
+        self.pump_safe_on.set(1 if pump_safe_on else 0)
+        if recipe_points:
+            first_step = recipe_points[0]
+            self.recipe_step_name.set(str(first_step.get('name', '')))
+            self.recipe_duration_s.set(str(first_step.get('duration_s', '')))
+            self.recipe_bath_temp_c.set('' if first_step.get('bath_setpoint_c') is None else str(first_step.get('bath_setpoint_c')))
+            self.recipe_tec_voltage_v.set('' if first_step.get('tec_voltage_v') is None else str(first_step.get('tec_voltage_v')))
+            self.recipe_tec_current_a.set('' if first_step.get('tec_current_a') is None else str(first_step.get('tec_current_a')))
+            self.recipe_tec_power_w.set('' if first_step.get('tec_power_w') is None else str(first_step.get('tec_power_w')))
+        self._refresh_recipe_table()
+        self._redraw_recipe_plot()
+
+    def load_recipe_config(self) -> None:
+        path_text = self.config_path.get().strip()
+        if not path_text:
+            path_text = filedialog.askopenfilename(filetypes=[('JSON files', '*.json'), ('All files', '*.*')])
+        if not path_text:
+            return
+        try:
+            content = self._read_json_config(path_text)
+            self._apply_recipe_points_from_config(content)
+        except Exception as exc:
+            messagebox.showerror('Load recipe failed', str(exc))
+            return
+        self.config_path.set(path_text)
+        self._load_requested_input_from_config(path_text)
+        self._remember_last_config_path(path_text)
 
     def _build_recipe_payload(self) -> dict[str, object]:
         if not self.recipe_points:

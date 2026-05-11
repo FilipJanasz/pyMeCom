@@ -406,3 +406,85 @@ def test_window_geometry_uses_small_margin_when_screen_is_below_minimums():
     assert geometry == "776x576+12+12"
     assert min_width == 776
     assert min_height == 560
+
+
+def test_recipe_points_from_unified_config_preserves_steps_and_safety():
+    content = {
+        "steps": [
+            {
+                "name": "preheat",
+                "duration_s": 12,
+                "bath_setpoint_c": 28.5,
+                "tec_voltage_v": 2.0,
+                "tec_current_a": 0.4,
+                "tec_power_w": 0.8,
+            },
+            {
+                "name": "stable",
+                "duration_s": 30,
+                "bath_setpoint_c": 30,
+                "progression_mode": "stability",
+                "stability_band_c": 0.2,
+                "stability_hold_s": 5,
+                "stability_timeout_s": 120,
+            },
+        ],
+        "safety": {
+            "bath_standby_setpoint_c": 24.0,
+            "pump_on_in_safe_state": False,
+        },
+    }
+
+    points, standby_temp_c, pump_safe_on = LiveLoggerGui._recipe_points_from_config_content(content)
+
+    assert points == [
+        {
+            "name": "preheat",
+            "duration_s": 12.0,
+            "progression_mode": "time",
+            "bath_setpoint_c": 28.5,
+            "tec_voltage_v": 2.0,
+            "tec_current_a": 0.4,
+            "tec_power_w": 0.8,
+        },
+        {
+            "name": "stable",
+            "duration_s": 30.0,
+            "progression_mode": "stability",
+            "bath_setpoint_c": 30.0,
+            "stability_band_c": 0.2,
+            "stability_hold_s": 5.0,
+            "stability_timeout_s": 120.0,
+        },
+    ]
+    assert standby_temp_c == 24.0
+    assert pump_safe_on is False
+
+
+def test_recipe_points_from_legacy_power_schedule_config():
+    content = {
+        "power_schedule": [
+            {
+                "name": "legacy",
+                "power": 0.5,
+                "duration_seconds": 10,
+                "set_voltage": 1.0,
+                "set_current": 0.5,
+            }
+        ]
+    }
+
+    points, standby_temp_c, pump_safe_on = LiveLoggerGui._recipe_points_from_config_content(content)
+
+    assert points == [
+        {
+            "name": "legacy",
+            "duration_s": 10.0,
+            "progression_mode": "time",
+            "tec_voltage_v": 1.0,
+            "tec_current_a": 0.5,
+            "tec_power_w": 0.5,
+        }
+    ]
+    assert standby_temp_c == 25.0
+    assert pump_safe_on is True
