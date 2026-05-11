@@ -57,6 +57,8 @@ TEC_ADDRESS_SCAN_LIMIT = 16
 FORM_PATH_WIDTH_CHARS = 72
 FORM_FIELD_WIDTH_CHARS = 48
 PREVIEW_PLOT_HEIGHT_IN = 3.0
+RECIPE_LIST_WIDTH_CHARS = 72
+RECIPE_PREVIEW_PLOT_HEIGHT_IN = 3.0
 BUTTON_ROW_PAD_X = 8
 
 
@@ -443,36 +445,51 @@ class LiveLoggerGui:
         Checkbutton(io_frame, text='Show requested input line', variable=self.show_requested_line, command=self._redraw_requested_input_plot).grid(row=10, column=0, columnspan=2, sticky='w')
         recipe_frame = Frame(self.example_editor_tab, padx=8, pady=8)
         recipe_frame.pack(fill=BOTH, expand=True)
-        Label(recipe_frame, text='Recipe Builder (click preview points or edit table rows)', font=('TkDefaultFont', 9, 'bold')).grid(row=0, column=0, columnspan=7, sticky='w')
-        Label(recipe_frame, text='Name').grid(row=1, column=0, sticky='w')
-        Entry(recipe_frame, textvariable=self.recipe_step_name, width=12).grid(row=1, column=1, sticky='w')
-        Label(recipe_frame, text='Duration s').grid(row=1, column=2, sticky='w')
-        Entry(recipe_frame, textvariable=self.recipe_duration_s, width=8).grid(row=1, column=3, sticky='w')
-        Label(recipe_frame, text='Bath °C').grid(row=2, column=0, sticky='w')
-        Entry(recipe_frame, textvariable=self.recipe_bath_temp_c, width=8).grid(row=2, column=1, sticky='w')
-        Label(recipe_frame, text='TEC V/A/W').grid(row=2, column=2, sticky='w')
-        Entry(recipe_frame, textvariable=self.recipe_tec_voltage_v, width=7).grid(row=2, column=3, sticky='w')
-        Entry(recipe_frame, textvariable=self.recipe_tec_current_a, width=7).grid(row=2, column=4, sticky='w')
-        Entry(recipe_frame, textvariable=self.recipe_tec_power_w, width=8).grid(row=2, column=5, sticky='w')
-        Button(recipe_frame, text='Add/Update Step', command=self.recipe_add_or_update_step).grid(row=3, column=0, columnspan=2, sticky='w')
-        Button(recipe_frame, text='Delete Step', command=self.recipe_delete_selected_step).grid(row=3, column=2, sticky='w')
-        Button(recipe_frame, text='Save Recipe JSON', command=self.save_recipe_config).grid(row=3, column=3, columnspan=2, sticky='w')
-        self.recipe_list = Listbox(recipe_frame, height=4, width=72, exportselection=False)
-        self.recipe_list.grid(row=4, column=0, columnspan=7, sticky='we', pady=(4, 0))
+        Label(recipe_frame, text='Recipe Builder (click preview points or edit table rows)', font=('TkDefaultFont', 9, 'bold')).grid(row=0, column=0, columnspan=2, sticky='w')
+
+        recipe_fields_frame = Frame(recipe_frame, padx=4, pady=4, relief='groove', bd=1)
+        recipe_fields_frame.grid(row=1, column=0, sticky='nw', padx=(0, 8))
+        Label(recipe_fields_frame, text='Step fields', font=('TkDefaultFont', 9, 'bold')).grid(row=0, column=0, columnspan=2, sticky='w')
+        grid_labeled_entry(recipe_fields_frame, 'Name', self.recipe_step_name, 1, width=16)
+        grid_labeled_entry(recipe_fields_frame, 'Duration s', self.recipe_duration_s, 2, width=10)
+        grid_labeled_entry(recipe_fields_frame, 'Bath °C', self.recipe_bath_temp_c, 3, width=10)
+        grid_labeled_entry(recipe_fields_frame, 'TEC Voltage V', self.recipe_tec_voltage_v, 4, width=10)
+        grid_labeled_entry(recipe_fields_frame, 'TEC Current A', self.recipe_tec_current_a, 5, width=10)
+        grid_labeled_entry(recipe_fields_frame, 'TEC Preview W', self.recipe_tec_power_w, 6, width=10)
+
+        grid_button_row(
+            recipe_frame,
+            row=2,
+            column=0,
+            columnspan=1,
+            buttons=[
+                ('Add/Update Step', self.recipe_add_or_update_step),
+                ('Delete Step', self.recipe_delete_selected_step),
+                ('Save Recipe JSON', self.save_recipe_config),
+            ],
+        )
+
+        recipe_table_frame = Frame(recipe_frame)
+        recipe_table_frame.grid(row=1, column=1, rowspan=2, sticky='nsew')
+        recipe_table_frame.grid_columnconfigure(0, weight=1)
+        recipe_table_frame.grid_rowconfigure(0, weight=1)
+        self.recipe_list = Listbox(recipe_table_frame, height=7, width=RECIPE_LIST_WIDTH_CHARS, exportselection=False)
+        self.recipe_list.grid(row=0, column=0, sticky='nsew')
         self.recipe_list.bind('<<ListboxSelect>>', self._recipe_selection_changed)
         self.recipe_plot_frame = Frame(recipe_frame)
-        self.recipe_plot_frame.grid(row=5, column=0, columnspan=7, sticky='nsew', pady=(4, 0))
+        self.recipe_plot_frame.grid(row=3, column=0, columnspan=2, sticky='nsew', pady=(8, 0))
         self.recipe_figure = None
         self.recipe_axes = None
         self.recipe_canvas = None
         if Figure is not None:
-            self.recipe_figure = Figure(figsize=(5.5, 2.1), dpi=100)
+            self.recipe_figure = Figure(figsize=(5.5, RECIPE_PREVIEW_PLOT_HEIGHT_IN), dpi=100)
             self.recipe_axes = self.recipe_figure.subplots(2, 1, sharex=True)
             self.recipe_canvas = FigureCanvasTkAgg(self.recipe_figure, master=self.recipe_plot_frame)
             self.recipe_canvas.get_tk_widget().pack(fill=BOTH, expand=True)
             self.recipe_canvas.mpl_connect('button_press_event', self._recipe_plot_clicked)
             self._redraw_recipe_plot()
-        recipe_frame.grid_columnconfigure(6, weight=1)
+        recipe_frame.grid_columnconfigure(1, weight=1)
+        recipe_frame.grid_rowconfigure(3, weight=1)
         Checkbutton(right_col, text='Show live line (default on)', variable=self.show_live_line, command=self._redraw_plot).pack(anchor='w')
         Checkbutton(right_col, text='Enable second live plot (defaults to diff voltage 1/2)', variable=self.enable_second_plot, command=self._redraw_plot).pack(anchor='w')
         self._fit_window_to_screen()
