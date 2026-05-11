@@ -43,6 +43,8 @@ UNIFIED_LIVE_COLUMNS = [
     'tec_actual_power_w',
     'tec_voltage_v',
     'tec_current_a',
+    'tec_hr_1_differential_voltage_v',
+    'tec_hr_2_differential_voltage_v',
 ]
 UNIFIED_DEFAULT_COLUMNS = ['bath_temp_c', 'tec_actual_power_w', 'bath_setpoint_c', 'tec_power_w']
 CONNECTION_STATUS_WRAP_PX = 260
@@ -75,6 +77,9 @@ class NoopTecAdapter:
         return None
 
     def read_actual_power(self):
+        return None
+
+    def read_differential_voltage(self, instance: int):
         return None
 
     def safe_output(self, power_w: float = 0.0) -> None:

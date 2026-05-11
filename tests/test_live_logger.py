@@ -37,6 +37,16 @@ class LiveLoggerFormattingTests(unittest.TestCase):
         self.assertNotIn('105.1: Error Number', labels)
         self.assertNotIn('1044.2: LR2 Temp', labels)
 
+    def test_default_parameters_include_manual_hr_differential_voltage_instances(self):
+        specs = {spec.key: spec for spec in default_live_parameters(channel=1)}
+
+        self.assertEqual(specs['diff_voltage_1'].parameter_id, 1046)
+        self.assertEqual(specs['diff_voltage_1'].parameter_format, 'FLOAT32')
+        self.assertEqual(specs['diff_voltage_1'].instance, 1)
+        self.assertEqual(specs['diff_voltage_2'].parameter_id, 1046)
+        self.assertEqual(specs['diff_voltage_2'].parameter_format, 'FLOAT32')
+        self.assertEqual(specs['diff_voltage_2'].instance, 2)
+
     def test_flush_csv_row_flushes_and_fsyncs_real_files(self):
         with mock.patch("workflows.automation.common.logging_io.os.fsync") as fsync:
             handle = mock.Mock()
