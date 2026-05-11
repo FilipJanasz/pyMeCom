@@ -54,6 +54,10 @@ WINDOW_MIN_WIDTH_PX = 900
 WINDOW_MIN_HEIGHT_PX = 560
 WINDOW_SMALL_SCREEN_MARGIN_PX = 24
 TEC_ADDRESS_SCAN_LIMIT = 16
+FORM_PATH_WIDTH_CHARS = 72
+FORM_FIELD_WIDTH_CHARS = 48
+PREVIEW_PLOT_HEIGHT_IN = 3.0
+BUTTON_ROW_PAD_X = 8
 
 
 class NoopTecAdapter:
@@ -214,9 +218,31 @@ class LiveLoggerGui:
         top.grid_columnconfigure(1, weight=2, uniform='run_setup_top')
         top.grid_rowconfigure(0, weight=1)
 
-        def add_row(parent: Frame, label: str, var, row: int, width: int = 42):
+        def grid_labeled_entry(
+            parent: Frame,
+            label: str,
+            var,
+            row: int,
+            width: int = FORM_FIELD_WIDTH_CHARS,
+            column: int = 1,
+            columnspan: int = 1,
+            stretch: bool = False,
+        ) -> Entry:
             Label(parent, text=label).grid(row=row, column=0, sticky='w')
-            Entry(parent, textvariable=var, width=width).grid(row=row, column=1, sticky='we')
+            entry = Entry(parent, textvariable=var, width=width)
+            entry.grid(row=row, column=column, columnspan=columnspan, sticky='we' if stretch else 'w')
+            return entry
+
+        def add_row(parent: Frame, label: str, var, row: int, width: int = 42):
+            grid_labeled_entry(parent, label, var, row, width=width, stretch=True)
+
+        def grid_button_row(parent: Frame, row: int, column: int, columnspan: int, buttons: list[tuple[str, object]]) -> Frame:
+            button_frame = Frame(parent)
+            button_frame.grid(row=row, column=column, columnspan=columnspan, sticky='w')
+            for index, (text, command) in enumerate(buttons):
+                padx = (0, BUTTON_ROW_PAD_X) if index < len(buttons) - 1 else 0
+                Button(button_frame, text=text, command=command).pack(side=LEFT, padx=padx)
+            return button_frame
 
         def add_status_label(parent: Frame, var, row: int, column: int, columnspan: int = 1):
             Label(
@@ -316,28 +342,31 @@ class LiveLoggerGui:
         self.run_preview_canvas.grid(row=0, column=1, rowspan=4, sticky='e', padx=(8, 0))
         self._redraw_run_preview()
 
-        Label(io_frame, text='Config JSON').grid(row=1, column=0, sticky='w')
-        Entry(io_frame, textvariable=self.config_path, width=44).grid(row=1, column=1, columnspan=4, sticky='we')
-        Button(io_frame, text='Browse', command=self.browse_config).grid(row=2, column=1, sticky='w')
-        Button(io_frame, text='Load JSON', command=self.load_config).grid(row=2, column=2, sticky='w')
-        Button(io_frame, text='Save JSON', command=self.save_config).grid(row=2, column=3, sticky='w')
-        Button(io_frame, text='Build Unified Example JSON', command=self.save_unified_example_config).grid(row=2, column=4, sticky='w')
-        Label(io_frame, text='Output Directory').grid(row=3, column=0, sticky='w')
-        Entry(io_frame, textvariable=self.output_directory, width=42).grid(row=3, column=1, columnspan=4, sticky='we')
-        Label(io_frame, text='Output Prefix').grid(row=4, column=0, sticky='w')
-        Entry(io_frame, textvariable=self.output_prefix, width=42).grid(row=4, column=1, columnspan=4, sticky='we')
-        Label(io_frame, text='Huber Temp Curve °C (comma-separated)').grid(row=5, column=0, sticky='w')
-        Entry(io_frame, textvariable=self.huber_curve_c, width=42).grid(row=5, column=1, columnspan=4, sticky='we')
-        Label(io_frame, text='TEC Voltage Curve V (comma-separated)').grid(row=6, column=0, sticky='w')
-        Entry(io_frame, textvariable=self.voltage_curve_v, width=42).grid(row=6, column=1, columnspan=4, sticky='we')
-        Label(io_frame, text='TEC Current Curve A (comma-separated)').grid(row=7, column=0, sticky='w')
-        Entry(io_frame, textvariable=self.current_curve_a, width=42).grid(row=7, column=1, columnspan=4, sticky='we')
-        Label(io_frame, text='Step Duration Seconds').grid(row=8, column=0, sticky='w')
-        Entry(io_frame, textvariable=self.step_duration_s, width=16).grid(row=8, column=1, sticky='w')
+        grid_labeled_entry(io_frame, 'Config JSON', self.config_path, 1, width=FORM_PATH_WIDTH_CHARS, columnspan=4)
+        grid_button_row(
+            io_frame,
+            row=2,
+            column=1,
+            columnspan=4,
+            buttons=[
+                ('Browse', self.browse_config),
+                ('Load JSON', self.load_config),
+                ('Save JSON', self.save_config),
+                ('Build Unified Example JSON', self.save_unified_example_config),
+            ],
+        )
+        grid_labeled_entry(io_frame, 'Output Directory', self.output_directory, 3, columnspan=4)
+        grid_labeled_entry(io_frame, 'Output Prefix', self.output_prefix, 4, columnspan=4)
+        grid_labeled_entry(io_frame, 'Huber Temp Curve °C (comma-separated)', self.huber_curve_c, 5, columnspan=4)
+        grid_labeled_entry(io_frame, 'TEC Voltage Curve V (comma-separated)', self.voltage_curve_v, 6, columnspan=4)
+        grid_labeled_entry(io_frame, 'TEC Current Curve A (comma-separated)', self.current_curve_a, 7, columnspan=4)
+        grid_labeled_entry(io_frame, 'Step Duration Seconds', self.step_duration_s, 8, width=16)
         Label(io_frame, text='Build Unified Example JSON is a template generator: it uses only non-empty curve fields and does not start hardware.').grid(row=8, column=2, columnspan=3, sticky='w')
 
         runtime_frame.grid_columnconfigure(1, weight=1)
-        io_frame.grid_columnconfigure(1, weight=1)
+        io_frame.grid_columnconfigure(1, weight=0)
+        io_frame.grid_columnconfigure(4, weight=1)
+        io_frame.grid_rowconfigure(9, weight=1)
 
         buttons = Frame(self.run_tab, padx=8, pady=4)
         buttons.pack(fill=BOTH, padx=4)
@@ -399,7 +428,7 @@ class LiveLoggerGui:
             self.axis.set_title('Live plot (select columns then start)')
             self.axis.set_xlabel('Timestamp (UTC)')
             self.axis.grid(True, which='major', linestyle='--', alpha=0.6)
-            self.request_figure = Figure(figsize=(5.5, 2.0), dpi=100)
+            self.request_figure = Figure(figsize=(5.5, PREVIEW_PLOT_HEIGHT_IN), dpi=100)
             self.request_axes = self.request_figure.subplots(2, 1, sharex=True)
             self.request_canvas = FigureCanvasTkAgg(self.request_figure, master=self.request_plot_frame)
             self.request_canvas.get_tk_widget().pack(fill=BOTH, expand=True)
