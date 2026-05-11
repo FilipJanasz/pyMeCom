@@ -156,6 +156,8 @@ class LiveLoggerGui:
         self.recipe_tec_voltage_v = StringVar(value='')
         self.recipe_tec_current_a = StringVar(value='')
         self.recipe_tec_power_w = StringVar(value='')
+        self.recipe_save_path = StringVar(value=self._default_recipe_save_path())
+        self.recipe_total_duration_text = StringVar(value='Recipe total duration: 0:00')
 
         self.last_output_csv: Path | None = None
         self.run_thread: threading.Thread | None = None
@@ -463,22 +465,30 @@ class LiveLoggerGui:
         grid_labeled_entry(recipe_fields_frame, 'TEC Voltage V', self.recipe_tec_voltage_v, 4, width=10)
         grid_labeled_entry(recipe_fields_frame, 'TEC Current A', self.recipe_tec_current_a, 5, width=10)
         grid_labeled_entry(recipe_fields_frame, 'TEC Preview W', self.recipe_tec_power_w, 6, width=10)
+        Label(recipe_fields_frame, textvariable=self.recipe_total_duration_text, font=('TkDefaultFont', 9, 'bold')).grid(row=7, column=0, columnspan=2, sticky='w', pady=(6, 0))
 
+        recipe_actions_frame = Frame(recipe_frame)
+        recipe_actions_frame.grid(row=2, column=0, columnspan=2, sticky='we', pady=(4, 0))
+        recipe_actions_frame.grid_columnconfigure(1, weight=1)
         grid_button_row(
-            recipe_frame,
-            row=2,
+            recipe_actions_frame,
+            row=0,
             column=0,
-            columnspan=1,
+            columnspan=2,
             buttons=[
                 ('Add/Update Step', self.recipe_add_or_update_step),
                 ('Delete Step', self.recipe_delete_selected_step),
-                ('Load Existing JSON', self.load_recipe_config),
+                ('Browse JSON to Edit', self.browse_recipe_config),
+                ('Use Current Example from Example Loader', self.load_recipe_config),
                 ('Save Recipe JSON', self.save_recipe_config),
             ],
         )
+        Label(recipe_actions_frame, text='Save Recipe JSON As').grid(row=1, column=0, sticky='w', pady=(6, 0))
+        Entry(recipe_actions_frame, textvariable=self.recipe_save_path, width=FORM_PATH_WIDTH_CHARS).grid(row=1, column=1, sticky='we', pady=(6, 0))
+        Button(recipe_actions_frame, text='Choose Save Name', command=self.choose_recipe_save_path).grid(row=1, column=2, sticky='w', padx=(6, 0), pady=(6, 0))
 
         recipe_table_frame = Frame(recipe_frame)
-        recipe_table_frame.grid(row=1, column=1, rowspan=2, sticky='nsew')
+        recipe_table_frame.grid(row=1, column=1, sticky='nsew')
         recipe_table_frame.grid_columnconfigure(0, weight=1)
         recipe_table_frame.grid_rowconfigure(0, weight=1)
         self.recipe_list = Listbox(recipe_table_frame, height=7, width=RECIPE_LIST_WIDTH_CHARS, exportselection=False)
@@ -521,6 +531,21 @@ class LiveLoggerGui:
             delta = -int(getattr(event, 'delta', 0) / 120)
         if delta:
             self.scroll_canvas.yview_scroll(delta, 'units')
+
+    @staticmethod
+    def _default_recipe_save_path() -> str:
+        return str(Path('examples') / 'gui_recipe.json')
+
+    @staticmethod
+    def _suggest_recipe_save_path(source_path: str) -> str:
+        if not source_path:
+            return LiveLoggerGui._default_recipe_save_path()
+        source = Path(source_path)
+        suffix = source.suffix or '.json'
+        return str(source.with_name(f'{source.stem}_edited{suffix}'))
+
+    def _set_recipe_save_path_from_source(self, source_path: str) -> None:
+        self.recipe_save_path.set(self._suggest_recipe_save_path(source_path))
 
     def _format_seconds(self, seconds: float | None) -> str:
         if seconds is None:
@@ -846,21 +871,22 @@ class LiveLoggerGui:
         self.recipe_tec_power_w.set('' if step.get('tec_power_w') is None else str(step.get('tec_power_w')))
 
     def _refresh_recipe_table(self) -> None:
-        if not hasattr(self, 'recipe_list'):
-            return
-        self.recipe_list.delete(0, END)
         elapsed = 0.0
+        if hasattr(self, 'recipe_list'):
+            self.recipe_list.delete(0, END)
         for idx, step in enumerate(self.recipe_points, start=1):
             duration = float(step.get('duration_s', 0.0) or 0.0)
             bath = step.get('bath_setpoint_c', '')
             power = step.get('tec_power_w', '')
             voltage = step.get('tec_voltage_v', '')
             current = step.get('tec_current_a', '')
-            self.recipe_list.insert(
-                END,
-                f'{idx:02d} t={elapsed:g}s dur={duration:g}s name={step.get("name", "")} bath={bath}C tec={power}W ({voltage}V/{current}A)',
-            )
+            if hasattr(self, 'recipe_list'):
+                self.recipe_list.insert(
+                    END,
+                    f'{idx:02d} t={elapsed:g}s dur={duration:g}s name={step.get("name", "")} bath={bath}C tec={power}W ({voltage}V/{current}A)',
+                )
             elapsed += duration
+        self.recipe_total_duration_text.set(f'Recipe total duration: {self._format_seconds(elapsed)} ({elapsed:g} s)')
 
     def _redraw_recipe_plot(self) -> None:
         if getattr(self, 'recipe_axes', None) is None or getattr(self, 'recipe_canvas', None) is None:
@@ -958,10 +984,7 @@ class LiveLoggerGui:
         self._refresh_recipe_table()
         self._redraw_recipe_plot()
 
-    def load_recipe_config(self) -> None:
-        path_text = self.config_path.get().strip()
-        if not path_text:
-            path_text = filedialog.askopenfilename(filetypes=[('JSON files', '*.json'), ('All files', '*.*')])
+    def _load_recipe_config_from_path(self, path_text: str) -> None:
         if not path_text:
             return
         try:
@@ -971,8 +994,32 @@ class LiveLoggerGui:
             messagebox.showerror('Load recipe failed', str(exc))
             return
         self.config_path.set(path_text)
+        self._set_recipe_save_path_from_source(path_text)
         self._load_requested_input_from_config(path_text)
         self._remember_last_config_path(path_text)
+
+    def load_recipe_config(self) -> None:
+        path_text = self.config_path.get().strip()
+        if not path_text:
+            messagebox.showinfo('No current example selected', 'Choose or load a Config JSON in the Example Loader tab first, or use Browse JSON to Edit.')
+            return
+        self._load_recipe_config_from_path(path_text)
+
+    def browse_recipe_config(self) -> None:
+        selected = filedialog.askopenfilename(filetypes=[('JSON files', '*.json'), ('All files', '*.*')])
+        if selected:
+            self._load_recipe_config_from_path(selected)
+
+    def choose_recipe_save_path(self) -> None:
+        current = self.recipe_save_path.get().strip() or self._default_recipe_save_path()
+        selected = filedialog.asksaveasfilename(
+            initialdir=str(Path(current).parent),
+            initialfile=Path(current).name,
+            defaultextension='.json',
+            filetypes=[('JSON files', '*.json'), ('All files', '*.*')],
+        )
+        if selected:
+            self.recipe_save_path.set(selected)
 
     def _build_recipe_payload(self) -> dict[str, object]:
         if not self.recipe_points:
@@ -988,7 +1035,10 @@ class LiveLoggerGui:
         }
 
     def save_recipe_config(self) -> None:
-        path_text = self.config_path.get().strip() or filedialog.asksaveasfilename(defaultextension='.json', filetypes=[('JSON files', '*.json')])
+        path_text = self.recipe_save_path.get().strip()
+        if not path_text:
+            self.choose_recipe_save_path()
+            path_text = self.recipe_save_path.get().strip()
         if not path_text:
             return
         try:
@@ -1067,6 +1117,7 @@ class LiveLoggerGui:
             messagebox.showerror('Load JSON failed', str(exc))
             return
         self._load_requested_input_from_config(path_text)
+        self._set_recipe_save_path_from_source(path_text)
         if hasattr(self, 'run_recipe_summary_text'):
             self.run_recipe_summary_text.set(self._loaded_recipe_label())
         self._redraw_run_preview()
