@@ -1,14 +1,23 @@
 import sys
 import types
 import unittest
+from unittest import mock
 from datetime import datetime, timezone
 
 serial_stub = types.ModuleType('serial')
 serial_stub.Serial = object
 serial_stub.serialutil = types.SimpleNamespace(SerialException=Exception)
+serial_tools_stub = types.ModuleType('serial.tools')
+serial_list_ports_stub = types.ModuleType('serial.tools.list_ports')
+serial_list_ports_stub.comports = lambda: []
+serial_tools_stub.list_ports = serial_list_ports_stub
+serial_stub.tools = serial_tools_stub
 sys.modules.setdefault('serial', serial_stub)
+sys.modules.setdefault('serial.tools', serial_tools_stub)
+sys.modules.setdefault('serial.tools.list_ports', serial_list_ports_stub)
 
 from workflows.automation.common.live_logger import LiveLoggerConfig, build_time_columns, default_live_parameters, looks_like_unified_run_config, ole_automation_date
+from workflows.automation.common.logging_io import flush_csv_row
 
 
 class LiveLoggerFormattingTests(unittest.TestCase):
@@ -27,6 +36,21 @@ class LiveLoggerFormattingTests(unittest.TestCase):
         labels = [spec.label for spec in default_live_parameters(channel=1)]
         self.assertNotIn('105.1: Error Number', labels)
         self.assertNotIn('1044.2: LR2 Temp', labels)
+
+    def test_flush_csv_row_flushes_and_fsyncs_real_files(self):
+        with mock.patch("workflows.automation.common.logging_io.os.fsync") as fsync:
+            handle = mock.Mock()
+            handle.fileno.return_value = 123
+            flush_csv_row(handle)
+        handle.flush.assert_called_once_with()
+        handle.fileno.assert_called_once_with()
+        fsync.assert_called_once_with(123)
+
+    def test_flush_csv_row_tolerates_file_like_objects_without_fileno(self):
+        handle = mock.Mock()
+        handle.fileno.side_effect = OSError("not a real file")
+        flush_csv_row(handle)
+        handle.flush.assert_called_once_with()
 
     def test_live_logger_config_defaults_and_parses_csv_flush_rows(self):
         self.assertEqual(LiveLoggerConfig().csv_flush_every_rows, 1)
