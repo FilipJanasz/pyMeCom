@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -11,8 +12,6 @@ from typing import Any, Callable, Dict, List, Optional
 
 from .logging_io import flush_csv_row
 from .run_config import RunConfig, UnifiedStep
-
-
 
 
 def _ole_automation_date(dt: datetime) -> float:
@@ -26,6 +25,20 @@ def build_time_columns(now: datetime) -> Dict[str, Any]:
         "Milliseconds": int(now.microsecond / 1000),
         "OLE Automation Date": _ole_automation_date(now),
     }
+
+
+def _safe_filename_part(value: str) -> str:
+    cleaned = re.sub(r"[^A-Za-z0-9_.-]+", "_", value.strip())
+    cleaned = cleaned.strip("._-")
+    return cleaned or "recipe"
+
+
+def build_calibration_log_stem(started_at: datetime, recipe_path: str | Path | None = None, run_name: str | None = None) -> str:
+    recipe_name = Path(recipe_path).stem if recipe_path else (run_name or "recipe")
+    date_text = started_at.strftime("%Y%m%d_%H%M%S")
+    return f"calibRun_{date_text}_{_safe_filename_part(recipe_name)}"
+
+
 class EngineState(str, Enum):
     IDLE = "IDLE"
     CONNECTING = "CONNECTING"
@@ -73,17 +86,20 @@ class DualDeviceRunEngine:
         legacy_power_policy: str = LegacyPowerPolicy.STRICT.value,
         event_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
         row_callback: Optional[Callable[[Dict[str, Any]], None]] = None,
+        recipe_path: str | Path | None = None,
     ) -> EnginePaths:
         started_at = datetime.now(timezone.utc)
-        stem = (run_config.run_name or started_at.strftime("%Y%m%d_%H%M%S")).replace(" ", "_")
+        stem = build_calibration_log_stem(started_at, recipe_path=recipe_path, run_name=run_config.run_name)
         self.output_directory.mkdir(parents=True, exist_ok=True)
         paths = EnginePaths(
-            csv_path=self.output_directory / f"run_timeline_{stem}.csv",
-            metadata_path=self.output_directory / f"run_timeline_{stem}.metadata.json",
+            csv_path=self.output_directory / f"{stem}.csv",
+            metadata_path=self.output_directory / f"{stem}.metadata.json",
         )
         metadata: Dict[str, Any] = {
             "started_at": started_at.isoformat(),
             "engine_state": self.state.value,
+            "log_stem": stem,
+            "recipe_path": str(recipe_path) if recipe_path else None,
             "safety": {
                 "tec_power_w_on_stop": run_config.safety.tec_power_w_on_stop,
                 "bath_standby_setpoint_c": run_config.safety.bath_standby_setpoint_c,
@@ -241,6 +257,11 @@ class DualDeviceRunEngine:
 
         standby_ok = self.bath_adapter.set_setpoint(run_config.safety.bath_standby_setpoint_c)
         safety_actions.append({"action": "bath_standby_setpoint", "setpoint_c": run_config.safety.bath_standby_setpoint_c, "ok": standby_ok})
+
+        stop_process = getattr(self.bath_adapter, "stop_process", None)
+        if callable(stop_process):
+            process_ok = bool(stop_process())
+            safety_actions.append({"action": "bath_stop_process", "ok": process_ok})
 
         if getattr(self.bath_adapter, "supports_pump_control", False):
             pump_ok = self.bath_adapter.set_pump_state(run_config.safety.pump_on_in_safe_state)

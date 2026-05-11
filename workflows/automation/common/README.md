@@ -19,12 +19,12 @@ The active transport-specific runtime files are in:
 
 - States: `IDLE`, `CONNECTING`, `RUNNING_STEP`, `STOPPING`, `COMPLETED`, `ERROR`
 - Time-based per-step progression (`duration_s`)
-- Unified timeline CSV + metadata sidecar JSON
+- Unified timeline CSV + metadata sidecar JSON named `calibRun_YYYYMMDD_HHMMSS_<recipeFileName>.*` when a recipe path is available
 - CSV header and every sampled row are flushed and fsynced immediately for recoverable partial logs
 - Deterministic safety cleanup on stop/error:
-  1. TEC safe output
-  2. Bath standby setpoint
-  3. Pump safe state (or explicit unsupported event)
+  1. TEC safe output (default 0 W)
+  2. Bath standby setpoint (default 20 °C)
+  3. Huber process/pump shutdown using the configured pump safe state (default pump off; unsupported pump control is logged)
 
 ### Legacy power_schedule zero-power interpretation policy
 

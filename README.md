@@ -112,8 +112,8 @@ Available now to avoid schema churn:
 `RunConfig.safety` supports:
 
 - `tec_power_w_on_stop` (default `0.0`)
-- `bath_standby_setpoint_c` (default `25.0`)
-- `pump_on_in_safe_state` (default `true`)
+- `bath_standby_setpoint_c` (default `20.0`)
+- `pump_on_in_safe_state` (default `false`)
 
 ### Backward compatibility with TEC-only power schedule
 
@@ -215,8 +215,8 @@ Expected:
 
 After each test run, inspect generated files:
 
-- `run_timeline_*.csv`
-- `run_timeline_*.metadata.json`
+- `calibRun_YYYYMMDD_HHMMSS_<recipeFileName>.csv`
+- `calibRun_YYYYMMDD_HHMMSS_<recipeFileName>.metadata.json`
 
 Expected:
 - Unified timeline rows contain both TEC and bath columns when unified mode is active, including TEC HR input differential-voltage samples as `tec_hr_1_differential_voltage_v` and `tec_hr_2_differential_voltage_v` when the TEC adapter is connected. These use the same TEC programming-manual channels already used by the TEC-only logger examples: Differential Voltage parameter `1046` with instances `1` (HR_1) and `2` (HR_2).

@@ -20,8 +20,8 @@ def make_gui(**values):
         "voltage_curve_v": "0.5,1.0,1.5",
         "current_curve_a": "0.2,0.2,0.25",
         "step_duration_s": "60",
-        "bath_standby_temp_c": "25.0",
-        "pump_safe_on": 1,
+        "bath_standby_temp_c": "20.0",
+        "pump_safe_on": 0,
         "duration": "",
         "recipe_step_name": "step_1",
         "recipe_duration_s": "60",
@@ -231,7 +231,7 @@ def test_recipe_payload_preserves_huber_only_steps():
 
     assert payload["run_name"] == "gui_recipe"
     assert payload["steps"] == gui.recipe_points
-    assert payload["safety"]["bath_standby_setpoint_c"] == 25.0
+    assert payload["safety"]["bath_standby_setpoint_c"] == 20.0
 
 
 def test_recipe_preview_points_builds_stepwise_tec_and_huber_curves():
@@ -486,5 +486,5 @@ def test_recipe_points_from_legacy_power_schedule_config():
             "tec_power_w": 0.5,
         }
     ]
-    assert standby_temp_c == 25.0
-    assert pump_safe_on is True
+    assert standby_temp_c == 20.0
+    assert pump_safe_on is False

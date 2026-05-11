@@ -82,15 +82,15 @@ class UnifiedStep:
 @dataclass
 class SafetyConfig:
     tec_power_w_on_stop: float = 0.0
-    bath_standby_setpoint_c: float = 25.0
-    pump_on_in_safe_state: bool = True
+    bath_standby_setpoint_c: float = 20.0
+    pump_on_in_safe_state: bool = False
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "SafetyConfig":
         cfg = cls(
             tec_power_w_on_stop=float(data.get("tec_power_w_on_stop", 0.0)),
-            bath_standby_setpoint_c=float(data.get("bath_standby_setpoint_c", 25.0)),
-            pump_on_in_safe_state=bool(data.get("pump_on_in_safe_state", True)),
+            bath_standby_setpoint_c=float(data.get("bath_standby_setpoint_c", 20.0)),
+            pump_on_in_safe_state=bool(data.get("pump_on_in_safe_state", False)),
         )
         if not math.isfinite(cfg.tec_power_w_on_stop):
             raise ValueError("safety.tec_power_w_on_stop must be finite")
