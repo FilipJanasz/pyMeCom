@@ -21,7 +21,7 @@
   ],
   "safety": {
     "tec_power_w_on_stop": 0.0,
-    "bath_standby_setpoint_c": 25.0,
-    "pump_on_in_safe_state": true
+    "bath_standby_setpoint_c": 20.0,
+    "pump_on_in_safe_state": false
   }
 }

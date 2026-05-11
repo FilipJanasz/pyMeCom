@@ -133,8 +133,8 @@ class LiveLoggerGui:
         self.output_directory = StringVar(value='live_logs')
         self.output_prefix = StringVar(value='power_live_log_com')
         self.huber_port = StringVar(value='')
-        self.bath_standby_temp_c = StringVar(value='25.0')
-        self.pump_safe_on = IntVar(value=1)
+        self.bath_standby_temp_c = StringVar(value='20.0')
+        self.pump_safe_on = IntVar(value=0)
         self.run_mode = StringVar(value='TEC-only')
         self.run_mode_selection = StringVar(value='Auto')
         self.detected_mode = StringVar(value='TEC-only')
@@ -184,6 +184,7 @@ class LiveLoggerGui:
         self.run_recipe_summary_text = StringVar(value='Recipe to run: no JSON loaded')
         self.run_progress_text = StringVar(value='Progress: idle')
         self.run_eta_text = StringVar(value='Done at: n/a')
+        self.run_finished_indicator_text = StringVar(value='Run status: idle')
         self.loaded_run_total_seconds = 0.0
         self._run_started_at_epoch: float | None = None
         self._current_run_duration_s: float | None = None
@@ -335,7 +336,7 @@ class LiveLoggerGui:
         Label(runtime_frame, text='Bath Standby °C').grid(row=7, column=0, sticky='w')
         Entry(runtime_frame, textvariable=self.bath_standby_temp_c, width=16).grid(row=7, column=1, sticky='w')
         Checkbutton(runtime_frame, text='Pump ON in safe state', variable=self.pump_safe_on).grid(row=8, column=1, columnspan=2, sticky='w')
-        Label(runtime_frame, text='(stop/error: keep bath pump running)').grid(row=9, column=1, columnspan=3, sticky='w')
+        Label(runtime_frame, text='(run end/stop/error: set bath to standby and apply pump safe state)').grid(row=9, column=1, columnspan=3, sticky='w')
 
         run_progress_frame = Frame(self.run_tab, padx=8, pady=4, relief='groove', bd=1)
         run_progress_frame.pack(fill=BOTH, padx=12, pady=(4, 0))
@@ -345,6 +346,7 @@ class LiveLoggerGui:
         Label(run_progress_frame, textvariable=self.run_recipe_summary_text, justify=LEFT, anchor='w').grid(row=1, column=0, sticky='we')
         Label(run_progress_frame, textvariable=self.run_progress_text, justify=LEFT, anchor='w').grid(row=2, column=0, sticky='we')
         Label(run_progress_frame, textvariable=self.run_eta_text, justify=LEFT, anchor='w').grid(row=3, column=0, sticky='we')
+        Label(run_progress_frame, textvariable=self.run_finished_indicator_text, justify=LEFT, anchor='w', fg='green4', font=('TkDefaultFont', 12, 'bold')).grid(row=4, column=0, sticky='we')
         self.run_preview_canvas = Canvas(run_progress_frame, width=320, height=78, bg='white', highlightthickness=1, highlightbackground='gray70')
         self.run_preview_canvas.grid(row=0, column=1, rowspan=4, sticky='e', padx=(8, 0))
         self._redraw_run_preview()
@@ -565,11 +567,13 @@ class LiveLoggerGui:
         self._current_run_duration_s = None
         self.run_progress_text.set(message)
         self.run_eta_text.set('Done at: n/a')
+        self.run_finished_indicator_text.set('Run status: idle')
         self._redraw_run_preview(progress_fraction=0.0)
 
     def _start_run_progress(self, total_seconds: float | None) -> None:
         self._run_started_at_epoch = time.time()
         self._current_run_duration_s = total_seconds if total_seconds and total_seconds > 0 else None
+        self.run_finished_indicator_text.set('Run status: running')
         self._update_run_progress_indicator()
 
     def _finish_run_progress(self, message: str) -> None:
@@ -581,12 +585,19 @@ class LiveLoggerGui:
             self._progress_update_job = None
         elapsed = None if self._run_started_at_epoch is None else time.time() - self._run_started_at_epoch
         total = self._current_run_duration_s
+        is_complete = 'complete' in message.lower()
         if total:
-            self._redraw_run_preview(progress_fraction=1.0)
+            self._redraw_run_preview(progress_fraction=1.0 if is_complete else None)
             self.run_progress_text.set(f'{message} | elapsed {self._format_seconds(elapsed)} of {self._format_seconds(total)}')
         else:
             self.run_progress_text.set(f'{message} | elapsed {self._format_seconds(elapsed)}')
-        self.run_eta_text.set('Done at: n/a')
+        if is_complete:
+            finished_at = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            self.run_eta_text.set(f'Finished at: {finished_at}')
+            self.run_finished_indicator_text.set(f'✅ RUN FINISHED at {finished_at}')
+        else:
+            self.run_eta_text.set('Done at: n/a')
+            self.run_finished_indicator_text.set(f'Run status: {message.replace("Progress: ", "").lower()}')
         self._run_started_at_epoch = None
         self._current_run_duration_s = None
 
@@ -1511,7 +1522,13 @@ class LiveLoggerGui:
         def worker() -> None:
             try:
                 self.root.after(0, lambda: self._set_controller_status('yellow', f'Controller status: connecting ({display_mode} run)'))
-                paths = engine.run(run_cfg, legacy_power_policy=LegacyPowerPolicy.ALLOW_ZERO_POWER.value, event_callback=on_event, row_callback=on_row)
+                paths = engine.run(
+                    run_cfg,
+                    legacy_power_policy=LegacyPowerPolicy.ALLOW_ZERO_POWER.value,
+                    event_callback=on_event,
+                    row_callback=on_row,
+                    recipe_path=path_text,
+                )
                 if getattr(engine.state, 'value', str(engine.state)) == 'ERROR':
                     self.root.after(0, lambda: self._finish_run_progress('Progress: failed'))
                     self.root.after(0, lambda p=paths.csv_path.name: self._set_controller_status('red', f'Controller status: {display_mode} run ended in ERROR ({p})'))

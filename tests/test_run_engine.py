@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 
 from workflows.automation.common.run_config import RunConfig
-from workflows.automation.common.run_engine import DualDeviceRunEngine
+from workflows.automation.common.run_engine import DualDeviceRunEngine, build_calibration_log_stem
 
 
 class FakeTecAdapter:
@@ -56,6 +56,7 @@ class FakeBathAdapter:
         self.closed = False
         self.pump_state = None
         self.process_started = False
+        self.process_stopped = False
 
     def connect(self):
         return True
@@ -66,6 +67,10 @@ class FakeBathAdapter:
 
     def start_process(self):
         self.process_started = True
+        return True
+
+    def stop_process(self):
+        self.process_stopped = True
         return True
 
     def read_bath_temp(self):
@@ -91,6 +96,7 @@ def test_normal_progression(tmp_path: Path):
     assert paths.csv_path.exists()
     metadata = json.loads(paths.metadata_path.read_text())
     assert metadata["engine_state"] == "COMPLETED"
+    assert paths.csv_path.name.startswith("calibRun_")
 
 
 def test_unified_timeline_logs_hr_differential_voltages(tmp_path: Path):
@@ -192,3 +198,44 @@ def test_unified_zero_power_clears_voltage_current_then_disables_output(tmp_path
     assert ("set_voltage_current", 0.0, 0.0) in tec.calls
     assert ("set_power", 0.0) in tec.calls
     assert tec.calls.index(("set_voltage_current", 0.0, 0.0)) < tec.calls.index(("set_power", 0.0))
+
+
+def test_default_safety_sets_bath_to_20_pump_off_and_zeroes_tec(tmp_path: Path):
+    cfg = RunConfig.from_dict({"steps": [{"name": "s1", "bath_setpoint_c": 22, "tec_power_w": 1.2, "duration_s": 0.05}]})
+    tec = FakeTecAdapter()
+    bath = FakeBathAdapter()
+    engine = DualDeviceRunEngine(tec, bath, tmp_path, sample_hz=30)
+
+    paths = engine.run(cfg)
+    metadata = json.loads(paths.metadata_path.read_text())
+
+    assert tec.safe_called is True
+    assert tec.power == 0.0
+    assert bath.setpoint == 20.0
+    assert bath.pump_state is False
+    assert bath.process_stopped is True
+    assert {"action": "tec_safe_output", "power_w": 0.0} in metadata["safety_actions"]
+    assert any(a == {"action": "bath_standby_setpoint", "setpoint_c": 20.0, "ok": True} for a in metadata["safety_actions"])
+    assert any(a == {"action": "bath_pump_safe_state", "pump_on": False, "ok": True} for a in metadata["safety_actions"])
+
+
+def test_recipe_filename_is_in_calibration_log_name(tmp_path: Path):
+    cfg = RunConfig.from_dict({"steps": [{"name": "s1", "tec_power_w": 0.0, "duration_s": 0.05}]})
+    engine = DualDeviceRunEngine(FakeTecAdapter(), FakeBathAdapter(), tmp_path, sample_hz=30)
+
+    paths = engine.run(cfg, recipe_path="C:/recipes/My Recipe.json")
+    metadata = json.loads(paths.metadata_path.read_text())
+
+    assert paths.csv_path.name.startswith("calibRun_")
+    assert paths.csv_path.name.endswith("_My_Recipe.csv")
+    assert paths.metadata_path.name.endswith("_My_Recipe.metadata.json")
+    assert metadata["log_stem"] == paths.csv_path.stem
+    assert metadata["recipe_path"] == "C:/recipes/My Recipe.json"
+
+
+def test_log_stem_sanitizes_blank_recipe_name():
+    from datetime import datetime, timezone
+
+    stem = build_calibration_log_stem(datetime(2026, 5, 11, 12, 30, 5, tzinfo=timezone.utc), run_name=" ** ")
+
+    assert stem == "calibRun_20260511_123005_recipe"
