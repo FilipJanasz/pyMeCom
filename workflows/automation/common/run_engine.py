@@ -9,6 +9,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
+from .logging_io import flush_csv_row
 from .run_config import RunConfig, UnifiedStep
 
 
@@ -139,6 +140,7 @@ class DualDeviceRunEngine:
             with open(paths.csv_path, "w", encoding="utf-8", newline="") as handle:
                 writer = csv.DictWriter(handle, fieldnames=fields)
                 writer.writeheader()
+                flush_csv_row(handle)
 
                 for step_index, step in enumerate(run_config.steps):
                     self._set_state(EngineState.RUNNING_STEP, emit, step_index=step_index, step_name=step.name)
@@ -155,7 +157,7 @@ class DualDeviceRunEngine:
                             return paths
                         row = self._sample_row(step_index, step)
                         writer.writerow(row)
-                        handle.flush()
+                        flush_csv_row(handle)
                         if row_callback:
                             row_callback(row)
                         time.sleep(interval)

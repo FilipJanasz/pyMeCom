@@ -48,6 +48,7 @@ This repository is being extended to support a single calibration workflow that 
 - JSON-configured run steps containing bath and/or TEC setpoints plus dwell duration.
 - GUI flow similar to current TEC-only tooling: load config, preview, start/stop, view status.
 - Unified sampled log output (same style as current TEC logging outputs).
+- Crash-resilient log growth across TEC-only, Huber-only, and Unified modes: CSV headers and every sampled row are flushed to disk immediately so partial data remains available if a run stops, errors, or the GUI/process fails.
 - Safe state behavior on completion/failure.
 
 ### Phase 2
@@ -130,6 +131,8 @@ Explicit mapping behavior:
 This allows incremental migration while keeping existing TEC-only configs usable for schema parsing.
 
 For the TEC-only live logger GUI, older TEC calibration `steps[]` entries and shared/unified `steps[]` entries are converted into TEC `power_schedule[]` entries when they contain TEC fields. The conversion preserves `name`, `power`/`tec_power_w`, `set_voltage`/`tec_voltage_v`, `set_current`/`tec_current_a`, and `enable_output`; Huber-only steps are skipped by the TEC scheduler.
+
+All GUI run modes use incremental CSV storage: the logger writes the header when the run file opens, then flushes each sampled row as soon as it is collected. This means the visible CSV grows during the run, and completed samples should remain available after a stop/error or process failure. Existing TEC-only configs may still contain `csv_flush_every_rows` for compatibility, but the live logger now uses per-row durable flushing for consistency with Unified and Huber-only runs.
 
 See `examples/unified_run_config.example.json` for a shared TEC + Huber example. In that file, each `steps[]` item is a coordinated action: `bath_setpoint_c` is the Huber bath setpoint, `tec_voltage_v` and `tec_current_a` are the TEC hardware setpoints, `tec_power_w` is a requested-power preview/logging value, and `duration_s` is how long the run engine dwells before advancing. The run engine starts Huber thermoregulation after applying each bath setpoint, matching the legacy Huber `CA` command path. The second example step uses `progression_mode: "stability"` with stability fields as a Phase-2 template; the current MVP remains time-based unless stability progression is explicitly enabled in the run engine. The top-level `safety` block defines what the engine should do on stop/error: zero or safe TEC output, return the bath to standby, and apply the pump safe state when the Huber client reports pump support.
 

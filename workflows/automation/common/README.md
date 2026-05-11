@@ -20,6 +20,7 @@ The active transport-specific runtime files are in:
 - States: `IDLE`, `CONNECTING`, `RUNNING_STEP`, `STOPPING`, `COMPLETED`, `ERROR`
 - Time-based per-step progression (`duration_s`)
 - Unified timeline CSV + metadata sidecar JSON
+- CSV header and every sampled row are flushed and fsynced immediately for recoverable partial logs
 - Deterministic safety cleanup on stop/error:
   1. TEC safe output
   2. Bath standby setpoint

@@ -13,6 +13,8 @@ from typing import Any, Callable, Dict, List, Optional
 from mecom.calibration import CalibrationStep, SafeChannelController
 from mecom.mecom import MeComSerial, MeComTcp
 
+from .logging_io import flush_csv_row
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -279,9 +281,7 @@ class LiveLogger:
         ) as handle:
             writer = csv.DictWriter(handle, fieldnames=fields)
             writer.writeheader()
-            handle.flush()
-            rows_since_flush = 0
-            flush_every_rows = max(1, int(self.config.csv_flush_every_rows))
+            flush_csv_row(handle)
 
             channel_config = type(
                 "LiveChannelConfig",
@@ -324,10 +324,7 @@ class LiveLogger:
                 for spec in self.config.parameters:
                     row[spec.label] = self._read_parameter(session, spec)
                 writer.writerow(row)
-                rows_since_flush += 1
-                if rows_since_flush >= flush_every_rows:
-                    handle.flush()
-                    rows_since_flush = 0
+                flush_csv_row(handle)
                 if row_callback is not None:
                     row_callback(row)
 
@@ -358,8 +355,6 @@ class LiveLogger:
                 sleep_for = interval - (time.monotonic() - tick)
                 if sleep_for > 0:
                     time.sleep(sleep_for)
-            if rows_since_flush > 0:
-                handle.flush()
         return csv_path
 
     def _apply_channel_setup_parameters(self, session: MeComSerial) -> None:
