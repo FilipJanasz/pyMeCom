@@ -9,10 +9,20 @@ logger = logging.getLogger("workflows.automation.huber")
 class HuberWorkflowAdapter:
     """Workflow-level wrapper around the existing Huber ThermostatConnection."""
 
-    def __init__(self, port: Optional[str] = None, debug: bool = False, connection: Optional[Any] = None):
+    def __init__(
+        self,
+        port: Optional[str] = None,
+        debug: bool = False,
+        connection: Optional[Any] = None,
+        protocol: str = "pp",
+    ):
+        from huber.protocol import normalize_protocol
+
+        self.protocol = normalize_protocol(protocol)
         if connection is None:
-            from huberStuff.pyPbCmd.huber_adapter import ThermostatConnection
-            connection = ThermostatConnection(port=port, debug=debug)
+            from huber.protocol import create_connection
+
+            connection = create_connection(protocol=self.protocol, port=port, debug=debug)
         self._connection = connection
         self.supports_pump_control = False
 
@@ -31,6 +41,7 @@ class HuberWorkflowAdapter:
             port=self._connection.port,
             supports_pump_control=self.supports_pump_control,
             error_code=self._connection.last_error_code,
+            protocol=self.protocol,
         )
         return ok
 

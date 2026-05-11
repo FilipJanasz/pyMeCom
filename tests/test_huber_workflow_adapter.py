@@ -69,3 +69,11 @@ def test_adapter_with_pump_capability():
     assert thermostat.pump_state is True
     assert adapter.safe_standby(18.0, False) is True
     assert thermostat.pump_state is False
+
+
+def test_adapter_records_selected_protocol():
+    conn = FakeConnection(thermostat=None)
+    adapter = HuberWorkflowAdapter(connection=conn, protocol="pb")
+
+    assert adapter.protocol == "pb"
+    assert adapter.connect() is True

@@ -13,7 +13,8 @@ from tkinter.ttk import Combobox, Notebook
 
 from serial.tools import list_ports
 
-from huberStuff.pyPbCmd.huber_adapter import HUBER_AVAILABLE as HUBER_HARDWARE_CLIENT_AVAILABLE
+from huber.legacy_pp import HUBER_AVAILABLE as HUBER_HARDWARE_CLIENT_AVAILABLE
+from huber.protocol import HUBER_PROTOCOLS, normalize_protocol
 
 from workflows.automation.common.live_logger import CalibrationStep, LiveLogger, LiveLoggerConfig, PowerScheduleStep, SafeChannelController, default_live_parameters, legacy_tec_steps_to_power_schedule, looks_like_unified_run_config
 from workflows.automation.common.run_config import RunConfig
@@ -133,6 +134,7 @@ class LiveLoggerGui:
         self.output_directory = StringVar(value='live_logs')
         self.output_prefix = StringVar(value='power_live_log_com')
         self.huber_port = StringVar(value='')
+        self.huber_protocol = StringVar(value='pp')
         self.bath_standby_temp_c = StringVar(value='20.0')
         self.pump_safe_on = IntVar(value=0)
         self.run_mode = StringVar(value='TEC-only')
@@ -305,9 +307,17 @@ class LiveLoggerGui:
         add_status_label(huber_detect_frame, self.huber_connection_text, row=1, column=1, columnspan=2)
         Label(huber_detect_frame, text='Port').grid(row=2, column=0, sticky='w')
         Entry(huber_detect_frame, textvariable=self.huber_port, width=24).grid(row=2, column=1, sticky='we')
+        Label(huber_detect_frame, text='Protocol').grid(row=3, column=0, sticky='w')
+        Combobox(
+            huber_detect_frame,
+            textvariable=self.huber_protocol,
+            state='readonly',
+            width=8,
+            values=HUBER_PROTOCOLS,
+        ).grid(row=3, column=1, sticky='w')
         self.detect_huber_button = Button(huber_detect_frame, text='Detect Huber', command=self.detect_huber)
-        self.detect_huber_button.grid(row=3, column=1, sticky='w')
-        Button(huber_detect_frame, text='Details', command=self.show_huber_connection_details).grid(row=3, column=2, sticky='w', padx=(4, 0))
+        self.detect_huber_button.grid(row=4, column=1, sticky='w')
+        Button(huber_detect_frame, text='Details', command=self.show_huber_connection_details).grid(row=4, column=2, sticky='w', padx=(4, 0))
         serial_tools_frame = Frame(conn_frame)
         serial_tools_frame.grid(row=2, column=0, columnspan=2, sticky='we', pady=(4, 0))
         serial_tools_frame.grid_columnconfigure(1, weight=1)
@@ -761,8 +771,15 @@ class LiveLoggerGui:
 
         self._run_manual_command('Set TEC V/I', action)
 
+    def _selected_huber_protocol(self) -> str:
+        try:
+            return normalize_protocol(self.huber_protocol.get())
+        except ValueError:
+            self.huber_protocol.set('pp')
+            return 'pp'
+
     def _with_huber_adapter(self, action):
-        adapter = HuberWorkflowAdapter(port=self.huber_port.get().strip() or None)
+        adapter = HuberWorkflowAdapter(port=self.huber_port.get().strip() or None, protocol=self._selected_huber_protocol())
         try:
             if not adapter.connect():
                 raise RuntimeError('Huber connect() returned False')
@@ -1526,7 +1543,7 @@ class LiveLoggerGui:
         )
         has_any_huber_request = any(step.bath_setpoint_c is not None for step in run_cfg.steps)
         tec_adapter = TecPowerAdapter(self._build_config()) if has_any_tec_request else NoopTecAdapter()
-        bath_adapter = HuberWorkflowAdapter(port=self.huber_port.get().strip() or None) if has_any_huber_request else NoopBathAdapter()
+        bath_adapter = HuberWorkflowAdapter(port=self.huber_port.get().strip() or None, protocol=self._selected_huber_protocol()) if has_any_huber_request else NoopBathAdapter()
         if has_any_tec_request:
             self._set_tec_connection_status('yellow', 'TEC: connecting (unified run)')
         else:
@@ -1926,7 +1943,8 @@ class LiveLoggerGui:
         if self.huber_detect_thread and self.huber_detect_thread.is_alive():
             return
         port = self.huber_port.get().strip() or None
-        self._set_huber_connection_status('yellow', 'Huber: detecting connection')
+        protocol = self._selected_huber_protocol()
+        self._set_huber_connection_status('yellow', f'Huber: detecting {protocol.upper()} connection')
         self._set_detect_button_state(self.detect_huber_button, False)
 
         def worker() -> None:
@@ -1935,7 +1953,7 @@ class LiveLoggerGui:
             status_text = ''
             detected_port = None
             try:
-                adapter = HuberWorkflowAdapter(port=port)
+                adapter = HuberWorkflowAdapter(port=port, protocol=protocol)
                 if not adapter.connect():
                     connection = getattr(adapter, '_connection', None)
                     detail = getattr(connection, 'last_error_message', None) or getattr(connection, 'last_error_code', None) or 'connect() returned False'
@@ -1948,6 +1966,7 @@ class LiveLoggerGui:
                 detail_parts = []
                 if detected_port:
                     detail_parts.append(str(detected_port))
+                detail_parts.append(protocol.upper())
                 if bath_temp is not None:
                     detail_parts.append(f'bath {bath_temp:g} °C')
                 if setpoint is not None:
