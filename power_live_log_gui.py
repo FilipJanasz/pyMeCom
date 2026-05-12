@@ -488,6 +488,8 @@ class LiveLoggerGui:
             buttons=[
                 ('Add/Update Step', self.recipe_add_or_update_step),
                 ('Delete Step', self.recipe_delete_selected_step),
+                ('Move Up', self.recipe_move_selected_step_up),
+                ('Move Down', self.recipe_move_selected_step_down),
                 ('Browse JSON to Edit', self.browse_recipe_config),
                 ('Use Current Example from Example Loader', self.load_recipe_config),
                 ('Save Recipe JSON', self.save_recipe_config),
@@ -874,6 +876,40 @@ class LiveLoggerGui:
         del self.recipe_points[selection[0]]
         self._refresh_recipe_table()
         self._redraw_recipe_plot()
+
+    def recipe_move_selected_step_up(self) -> None:
+        self._move_selected_recipe_step(-1)
+
+    def recipe_move_selected_step_down(self) -> None:
+        self._move_selected_recipe_step(1)
+
+    def _move_selected_recipe_step(self, direction: int) -> None:
+        selection = list(self.recipe_list.curselection()) if hasattr(self, 'recipe_list') else []
+        if not selection:
+            return
+        current_index = selection[0]
+        new_index = current_index + direction
+        if new_index < 0 or new_index >= len(self.recipe_points):
+            return
+        self.recipe_points[current_index], self.recipe_points[new_index] = (
+            self.recipe_points[new_index],
+            self.recipe_points[current_index],
+        )
+        self._refresh_recipe_table()
+        self._select_recipe_index(new_index)
+        self._redraw_recipe_plot()
+
+    def _select_recipe_index(self, index: int) -> None:
+        if not hasattr(self, 'recipe_list') or index < 0 or index >= len(self.recipe_points):
+            return
+        if hasattr(self.recipe_list, 'selection_clear'):
+            self.recipe_list.selection_clear(0, END)
+        self.recipe_list.selection_set(index)
+        if hasattr(self.recipe_list, 'activate'):
+            self.recipe_list.activate(index)
+        if hasattr(self.recipe_list, 'see'):
+            self.recipe_list.see(index)
+        self._recipe_selection_changed()
 
     def _recipe_selection_changed(self, _event=None) -> None:
         selection = list(self.recipe_list.curselection()) if hasattr(self, 'recipe_list') else []

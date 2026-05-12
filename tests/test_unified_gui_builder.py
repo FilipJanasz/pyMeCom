@@ -108,6 +108,8 @@ class FakeListbox:
     def __init__(self):
         self.items = []
         self.selected = []
+        self.active = None
+        self.seen = []
 
     def delete(self, start, end):
         self.items.clear()
@@ -118,6 +120,18 @@ class FakeListbox:
 
     def selection_set(self, idx):
         self.selected.append(idx)
+
+    def selection_clear(self, start, end):
+        self.selected.clear()
+
+    def curselection(self):
+        return tuple(self.selected)
+
+    def activate(self, idx):
+        self.active = idx
+
+    def see(self, idx):
+        self.seen.append(idx)
 
 
 def test_ole_to_unix_timestamp_uses_shared_constants():
@@ -289,6 +303,64 @@ def test_recipe_step_from_inputs_requires_voltage_current_pair():
         assert "voltage and current" in str(exc)
     else:
         raise AssertionError("expected partial TEC V/I inputs to fail")
+
+
+def test_recipe_move_selected_step_up_swaps_with_previous_step_and_keeps_selection():
+    gui = make_gui()
+    gui.recipe_points = [
+        {"name": "first", "duration_s": 10, "tec_power_w": 1.0},
+        {"name": "second", "duration_s": 20, "bath_setpoint_c": 28.0},
+    ]
+    gui.recipe_list = FakeListbox()
+    gui.recipe_total_duration_text = FakeVar("")
+    gui._redraw_recipe_plot = lambda: None
+    gui._refresh_recipe_table()
+    gui.recipe_list.selection_set(1)
+
+    gui.recipe_move_selected_step_up()
+
+    assert [step["name"] for step in gui.recipe_points] == ["second", "first"]
+    assert gui.recipe_list.selected == [0]
+    assert gui.recipe_step_name.get() == "second"
+    assert gui.recipe_duration_s.get() == "20"
+    assert gui.recipe_bath_temp_c.get() == "28.0"
+
+
+def test_recipe_move_selected_step_down_swaps_with_next_step():
+    gui = make_gui()
+    gui.recipe_points = [
+        {"name": "first", "duration_s": 10, "tec_power_w": 1.0},
+        {"name": "second", "duration_s": 20, "bath_setpoint_c": 28.0},
+    ]
+    gui.recipe_list = FakeListbox()
+    gui.recipe_total_duration_text = FakeVar("")
+    gui._redraw_recipe_plot = lambda: None
+    gui._refresh_recipe_table()
+    gui.recipe_list.selection_set(0)
+
+    gui.recipe_move_selected_step_down()
+
+    assert [step["name"] for step in gui.recipe_points] == ["second", "first"]
+    assert gui.recipe_list.selected == [1]
+    assert gui.recipe_step_name.get() == "first"
+
+
+def test_recipe_move_selected_step_ignores_boundary_rows():
+    gui = make_gui()
+    gui.recipe_points = [
+        {"name": "first", "duration_s": 10, "tec_power_w": 1.0},
+        {"name": "second", "duration_s": 20, "bath_setpoint_c": 28.0},
+    ]
+    gui.recipe_list = FakeListbox()
+    gui.recipe_total_duration_text = FakeVar("")
+    gui._redraw_recipe_plot = lambda: None
+    gui._refresh_recipe_table()
+    gui.recipe_list.selection_set(0)
+
+    gui.recipe_move_selected_step_up()
+
+    assert [step["name"] for step in gui.recipe_points] == ["first", "second"]
+    assert gui.recipe_list.selected == [0]
 
 
 class FakeTecSessionManager:
