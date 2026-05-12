@@ -491,7 +491,8 @@ class LiveLoggerGui:
             column=0,
             columnspan=1,
             buttons=[
-                ('Add/Update Step', self.recipe_add_or_update_step),
+                ('Add Step', self.recipe_add_step),
+                ('Edit Selected', self.recipe_edit_selected_step),
                 ('Insert Above', self.recipe_insert_step_above),
                 ('Insert Below', self.recipe_insert_step_below),
                 ('Delete Step', self.recipe_delete_selected_step),
@@ -874,20 +875,43 @@ class LiveLoggerGui:
             raise ValueError('Recipe step must include a bath setpoint or TEC setpoint')
         return step
 
-    def recipe_add_or_update_step(self) -> None:
+    def recipe_add_step(self) -> None:
         try:
             step = self._recipe_step_from_inputs()
         except ValueError as exc:
             messagebox.showerror('Invalid recipe step', str(exc))
             return
+        self.recipe_points.append(step)
+        new_index = len(self.recipe_points) - 1
+        self._refresh_recipe_table()
+        self._select_recipe_index(new_index)
+        self._redraw_recipe_plot()
+
+    def recipe_edit_selected_step(self) -> None:
+        selection = list(self.recipe_list.curselection()) if hasattr(self, 'recipe_list') else []
+        if not selection:
+            messagebox.showinfo('No step selected', 'Select an existing recipe step to edit.')
+            return
+        try:
+            step = self._recipe_step_from_inputs()
+        except ValueError as exc:
+            messagebox.showerror('Invalid recipe step', str(exc))
+            return
+        edit_index = selection[0]
+        self.recipe_points[edit_index] = step
+        self._refresh_recipe_table()
+        self._select_recipe_index(edit_index)
+        self._redraw_recipe_plot()
+
+    def recipe_add_or_update_step(self) -> None:
+        # Backward-compatible method for tests or user scripts that may still call
+        # the former combined button command. New GUI controls intentionally split
+        # append-at-end and edit-selected behaviors.
         selection = list(self.recipe_list.curselection()) if hasattr(self, 'recipe_list') else []
         if selection:
-            self.recipe_points[selection[0]] = step
+            self.recipe_edit_selected_step()
         else:
-            self.recipe_points.append(step)
-            self.recipe_step_name.set(f'step_{len(self.recipe_points) + 1}')
-        self._refresh_recipe_table()
-        self._redraw_recipe_plot()
+            self.recipe_add_step()
 
     def recipe_insert_step_above(self) -> None:
         self._insert_recipe_step_relative(insert_after_selected=False)
