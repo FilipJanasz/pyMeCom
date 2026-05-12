@@ -305,6 +305,51 @@ def test_recipe_step_from_inputs_requires_voltage_current_pair():
         raise AssertionError("expected partial TEC V/I inputs to fail")
 
 
+def test_recipe_insert_step_above_uses_selected_step_as_reference():
+    gui = make_gui(
+        recipe_step_name="inserted",
+        recipe_duration_s="15",
+        recipe_bath_temp_c="30.5",
+    )
+    gui.recipe_points = [
+        {"name": "first", "duration_s": 10, "tec_power_w": 1.0},
+        {"name": "second", "duration_s": 20, "bath_setpoint_c": 28.0},
+    ]
+    gui.recipe_list = FakeListbox()
+    gui.recipe_total_duration_text = FakeVar("")
+    gui._redraw_recipe_plot = lambda: None
+    gui._refresh_recipe_table()
+    gui.recipe_list.selection_set(1)
+
+    gui.recipe_insert_step_above()
+
+    assert [step["name"] for step in gui.recipe_points] == ["first", "inserted", "second"]
+    assert gui.recipe_points[1]["bath_setpoint_c"] == 30.5
+    assert gui.recipe_list.selected == [1]
+
+
+def test_recipe_insert_step_below_uses_selected_step_as_reference():
+    gui = make_gui(
+        recipe_step_name="inserted",
+        recipe_duration_s="15",
+        recipe_tec_power_w="2.5",
+    )
+    gui.recipe_points = [
+        {"name": "first", "duration_s": 10, "tec_power_w": 1.0},
+        {"name": "second", "duration_s": 20, "bath_setpoint_c": 28.0},
+    ]
+    gui.recipe_list = FakeListbox()
+    gui.recipe_total_duration_text = FakeVar("")
+    gui._redraw_recipe_plot = lambda: None
+    gui._refresh_recipe_table()
+    gui.recipe_list.selection_set(0)
+
+    gui.recipe_insert_step_below()
+
+    assert [step["name"] for step in gui.recipe_points] == ["first", "inserted", "second"]
+    assert gui.recipe_points[1]["tec_power_w"] == 2.5
+    assert gui.recipe_list.selected == [1]
+
 def test_recipe_move_selected_step_up_swaps_with_previous_step_and_keeps_selection():
     gui = make_gui()
     gui.recipe_points = [

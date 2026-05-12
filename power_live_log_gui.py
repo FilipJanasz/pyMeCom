@@ -479,25 +479,45 @@ class LiveLoggerGui:
 
         recipe_actions_frame = Frame(recipe_frame)
         recipe_actions_frame.grid(row=2, column=0, columnspan=2, sticky='we', pady=(4, 0))
+        recipe_actions_frame.grid_columnconfigure(0, weight=0)
         recipe_actions_frame.grid_columnconfigure(1, weight=1)
+
+        step_actions_frame = Frame(recipe_actions_frame, padx=4, pady=4, relief='groove', bd=1)
+        step_actions_frame.grid(row=0, column=0, sticky='nw', padx=(0, 8))
+        Label(step_actions_frame, text='Step editing', font=('TkDefaultFont', 9, 'bold')).grid(row=0, column=0, sticky='w')
         grid_button_row(
-            recipe_actions_frame,
-            row=0,
+            step_actions_frame,
+            row=1,
             column=0,
-            columnspan=2,
+            columnspan=1,
             buttons=[
                 ('Add/Update Step', self.recipe_add_or_update_step),
+                ('Insert Above', self.recipe_insert_step_above),
+                ('Insert Below', self.recipe_insert_step_below),
                 ('Delete Step', self.recipe_delete_selected_step),
                 ('Move Up', self.recipe_move_selected_step_up),
                 ('Move Down', self.recipe_move_selected_step_down),
+            ],
+        )
+
+        recipe_file_frame = Frame(recipe_actions_frame, padx=4, pady=4, relief='groove', bd=1)
+        recipe_file_frame.grid(row=0, column=1, sticky='nsew')
+        recipe_file_frame.grid_columnconfigure(1, weight=1)
+        Label(recipe_file_frame, text='File load/save', font=('TkDefaultFont', 9, 'bold')).grid(row=0, column=0, columnspan=3, sticky='w')
+        grid_button_row(
+            recipe_file_frame,
+            row=1,
+            column=0,
+            columnspan=3,
+            buttons=[
                 ('Browse JSON to Edit', self.browse_recipe_config),
                 ('Use Current Example from Example Loader', self.load_recipe_config),
                 ('Save Recipe JSON', self.save_recipe_config),
             ],
         )
-        Label(recipe_actions_frame, text='Save Recipe JSON As').grid(row=1, column=0, sticky='w', pady=(6, 0))
-        Entry(recipe_actions_frame, textvariable=self.recipe_save_path, width=FORM_PATH_WIDTH_CHARS).grid(row=1, column=1, sticky='we', pady=(6, 0))
-        Button(recipe_actions_frame, text='Choose Save Name', command=self.choose_recipe_save_path).grid(row=1, column=2, sticky='w', padx=(6, 0), pady=(6, 0))
+        Label(recipe_file_frame, text='Save Recipe JSON As').grid(row=2, column=0, sticky='w', pady=(6, 0))
+        Entry(recipe_file_frame, textvariable=self.recipe_save_path, width=FORM_PATH_WIDTH_CHARS).grid(row=2, column=1, sticky='we', pady=(6, 0))
+        Button(recipe_file_frame, text='Choose Save Name', command=self.choose_recipe_save_path).grid(row=2, column=2, sticky='w', padx=(6, 0), pady=(6, 0))
 
         recipe_table_frame = Frame(recipe_frame)
         recipe_table_frame.grid(row=1, column=1, sticky='nsew')
@@ -867,6 +887,28 @@ class LiveLoggerGui:
             self.recipe_points.append(step)
             self.recipe_step_name.set(f'step_{len(self.recipe_points) + 1}')
         self._refresh_recipe_table()
+        self._redraw_recipe_plot()
+
+    def recipe_insert_step_above(self) -> None:
+        self._insert_recipe_step_relative(insert_after_selected=False)
+
+    def recipe_insert_step_below(self) -> None:
+        self._insert_recipe_step_relative(insert_after_selected=True)
+
+    def _insert_recipe_step_relative(self, insert_after_selected: bool) -> None:
+        selection = list(self.recipe_list.curselection()) if hasattr(self, 'recipe_list') else []
+        if not selection:
+            messagebox.showinfo('No step selected', 'Select an existing recipe step to use as the insert reference.')
+            return
+        try:
+            step = self._recipe_step_from_inputs()
+        except ValueError as exc:
+            messagebox.showerror('Invalid recipe step', str(exc))
+            return
+        insert_index = selection[0] + (1 if insert_after_selected else 0)
+        self.recipe_points.insert(insert_index, step)
+        self._refresh_recipe_table()
+        self._select_recipe_index(insert_index)
         self._redraw_recipe_plot()
 
     def recipe_delete_selected_step(self) -> None:
